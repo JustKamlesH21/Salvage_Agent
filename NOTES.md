@@ -83,3 +83,115 @@ writing `execute_action()`, not after.
 
 **Toolchain:** Python 3.12 is not installed on this machine. The venv is 3.13.5.
 `pyproject.toml` still declares `>=3.12` and targets `py312` for ruff and mypy.
+
+---
+
+### 2026-09-01 — day 1, Razorpay test setup
+
+**The checker could not check the checker. **demo****
+
+`scripts/check_boundaries.py` shipped on day 0 with
+`SDK_SCAN_ROOTS = [ROOT / "api"]` and a comment exempting `scripts/` from the
+Razorpay SDK scan — reasoning that a setup script is not a runtime path. CLAUDE.md
+invariant 1 says "Only `api/executor/client.py` may import the Razorpay SDK. **No
+exceptions.**" So the repo had an exception to an invariant that says it has none.
+
+`make verify` was green across both day-0 commits. It could not have been
+anything else: the violation lived *inside the enforcement mechanism*. A checker
+cannot detect a hole in its own scope, because the hole is exactly the region it
+does not look at. Every other invariant here is protected by a check; the checks
+themselves were protected by nothing.
+
+It took a prompt from outside the system to surface it.
+
+*How it was found:* not by any check — by review, from outside.
+*Fix:* `SDK_SCAN_ROOTS` is now repo-wide with zero exemptions;
+`scripts/seed_razorpay.py` reaches Razorpay through
+`api.executor.client.get_razorpay_client()` like everything else. Added
+`test_every_top_level_python_directory_is_scanned`, which derives the set of
+top-level directories containing Python and asserts the scan covers all of them —
+so a package added later cannot silently fall outside it. That test is a check on
+the checker's *scope*, which is the one thing the checker could not check itself.
+*Class:* other — harness honesty.
+
+The general finding, worth saying out loud on camera: a self-checking system's
+blind spot is its own configuration. The fix is not more checks, it is deriving
+the check's scope from the repository rather than from a hand-maintained list.
+
+**Test-mode card token expiry — a demo-killer found on day 1 rather than day 10.
+**demo****
+
+Razorpay test-mode card tokens are valid **3 days**. Concretely:
+
+| If a mandate is authenticated on | The token is dead from |
+|---|---|
+| 2026-09-01 (today, day 1) | 2026-09-04 (day 4) |
+| 2026-09-09 (day 9) | 2026-09-12 |
+| 2026-09-10 (day 10, submission) | 2026-09-13 |
+
+Submission is ~2026-09-11. **Anything authenticated today is dead six days before
+it is needed.** The failure mode is silent: seeding succeeds, subscriptions look
+right in the Dashboard, and the live portion of the video breaks on the morning of
+the 10th with no time to re-seed.
+
+Split adopted: plans, customers and subscription *objects* are created now, because
+they do not expire. Card mandates are **authenticated on day 9 or 10 only**. Added
+to CLAUDE.md under "Things that will bite you" so it is a repo rule, not a note
+somebody has to remember to re-read.
+
+*How it was found:* reading SPEC §5.8 against the calendar before writing the seed
+script, which is the entire reason §5.8 says "know these before Day 1".
+*Class:* other — platform constraint.
+
+**Seed run — what exists in test mode now**
+
+Created 6 plans and 4 subscriptions.
+Account was a clean slate beforehand (0 plans, 0 subscriptions, 0 customers,
+0 payments). Ids are in `.razorpay-manifest.json`, gitignored.
+
+| Plan key | Razorpay id | Amount | Category |
+|---|---|---|---|
+| `insurance_term` | `plan_TWf805RpChtWTv` | ₹47,500 | insurance |
+| `mf_elss` | `plan_TWf80GO5RcJeBW` | ₹95,000 | mf |
+| `saas_business` | `plan_TWf7zjyA9QeYH7` | ₹15,000 | standard |
+| `saas_enterprise` | `plan_TWf7zuE35jtzy4` | ₹15,001 | standard |
+| `saas_pro` | `plan_TWf7zYYJmbIL22` | ₹1,499 | standard |
+| `saas_starter` | `plan_TWf7zOZSuIvNJA` | ₹299 | standard |
+
+| Subscription key | Razorpay id | Plan | Status | Purpose |
+|---|---|---|---|---|
+| `sub_business` | `sub_TWf80TVDUE1ABy` | saas_business | created | fixture:charged+invoice_paid |
+| `sub_enterprise` | `sub_TWf82A8VpuRH7d` | saas_enterprise | created | fixture:payment_failed |
+| `sub_halt_clock` | `sub_TWf84YVgmkUqE4` | saas_pro | created | fixture:halted — started day 1 |
+| `sub_mf` | `sub_TWf83MDmAonvRT` | mf_elss | created | fixture:afa_category_flip |
+
+**Payment links consumed: 0 of 30.** Two are budgeted for fixture capture
+(one paid, one spare). 28 remain for day 6 executor work and the ~8 demo cases.
+Update this line every time a link is created — the cap is per test business
+and permanent.
+
+**Card tokens created: 0.** No mandate has been authenticated, deliberately.
+Expiry arithmetic, for whenever the first one is:
+
+| Authenticated on | Token dead from |
+|---|---|
+| 2026-09-01 (day 1) | 2026-09-04 |
+| 2026-09-09 (day 9) | 2026-09-12 |
+| 2026-09-10 (day 10) | 2026-09-13 |
+
+Fixture-capture mandates (steps 5-7 of the runbook) will be authenticated
+whenever those steps are run and are *expected* to expire — they are not demo
+cases. Demo mandates: day 9-10 only.
+
+**Payload vs SPEC §4.1 / §5.7: not yet checkable.** No real delivery has been
+captured, so the assumption that `payment.failed` carries
+`error_code / error_description / error_source / error_step / error_reason` on
+the payment entity is still an assumption. Day 3's taxonomy is built on that
+shape. The first captured `payment.failed` settles it, and the answer goes here
+before any work starts on `taxonomy/failure_classes.yaml`.
+
+**HMAC parity with Razorpay: unverified.** Every committed fixture is signed
+with `salvage_fixture_webhook_secret`, which proves our verification is
+self-consistent, not that it matches Razorpay's. `tests/local_only/` closes
+that gap and needs a real capture. Result goes here once it runs. Until then
+the gap is open, and saying so is the point.

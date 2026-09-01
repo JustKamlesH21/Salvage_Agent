@@ -32,10 +32,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# Directories that hold no first-party Python worth scanning.
+NOT_SOURCE = frozenset(
+    {".venv", "venv", "node_modules", "__pycache__", "web", "htmlcov", "dist", "build"}
+)
+
 # Rule 1
 SDK_MODULE = "razorpay"
 SDK_ALLOWED = {ROOT / "api" / "executor" / "client.py"}
-SDK_SCAN_ROOTS = [ROOT / "api"]
+# Repo-wide, with no exemptions. CLAUDE.md invariant 1 says "no exceptions" and
+# means it: scripts/seed_razorpay.py reaches Razorpay through
+# api.executor.client.get_razorpay_client(), not through its own import.
+#
+# This list was `[ROOT / "api"]` on day 0, with scripts/ carved out. That
+# exemption survived a green `make verify` because the harness was the
+# exemption — see the note in NOTES.md. test_boundaries_check.py now asserts
+# this list covers every top-level Python directory, so a new one cannot
+# silently escape the scan.
+SDK_SCAN_ROOTS = [ROOT / "api", ROOT / "scripts", ROOT / "sim", ROOT / "eval", ROOT / "tests"]
 
 # Rule 2
 APPEND_ONLY_COLLECTIONS = ("events", "audit")
@@ -57,11 +71,25 @@ MUTATING_CALLS = frozenset(
 # Repository classes that must never gain a mutating method.
 APPEND_ONLY_REPOS = frozenset({"_ChainedAppendOnly", "EventRepository", "AuditRepository"})
 FORBIDDEN_REPO_METHOD_PREFIXES = ("update", "delete", "replace", "upsert", "remove", "drop", "set_")
-APPEND_ONLY_SCAN_ROOTS = [ROOT / "api", ROOT / "scripts", ROOT / "sim", ROOT / "eval"]
+APPEND_ONLY_SCAN_ROOTS = list(SDK_SCAN_ROOTS)
 
-# scripts/seed_razorpay.py legitimately talks to Razorpay to create test-mode
-# plans and subscriptions. It is a setup script, not a runtime path, and it is
-# outside SDK_SCAN_ROOTS for that reason. Do not widen this.
+
+def top_level_python_dirs() -> list[Path]:
+    """Every top-level directory in the repo that contains Python source.
+
+    SDK_SCAN_ROOTS must cover all of these. A new package added next to api/
+    would otherwise be outside the scan and free to import the SDK, which is
+    precisely how the day-0 exemption went unnoticed.
+    """
+    found: list[Path] = []
+    for child in sorted(ROOT.iterdir()):
+        if not child.is_dir() or child.name.startswith(".") or child.name in NOT_SOURCE:
+            continue
+        if child.name.endswith(".egg-info"):
+            continue
+        if any(child.rglob("*.py")):
+            found.append(child)
+    return found
 
 
 class Violation:
@@ -224,7 +252,7 @@ def main() -> int:
             )
         )
 
-    print(f"boundaries: scanned {scanned} file(s) under api/")
+    print(f"boundaries: scanned {scanned} file(s) across {len(SDK_SCAN_ROOTS)} root(s)")
     if violations:
         print(f"boundaries: FAIL — {len(violations)} violation(s)")
         for violation in violations:

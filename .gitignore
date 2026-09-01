@@ -33,3 +33,6 @@ npm-debug.log*
 .DS_Store
 *.log
 scratch/
+.razorpay-manifest.json
+tests/fixtures/_unredacted/
+tests/local_only/

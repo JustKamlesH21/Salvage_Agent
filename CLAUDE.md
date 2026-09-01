@@ -71,6 +71,9 @@ Error messages state what happened and what to do. They do not apologise and the
 
 - Verify the webhook HMAC on the **raw body**. Do not parse or cast before verifying.
 - Razorpay test-mode card tokens expire in 3 days. Only the ~8 demo cases use the live API.
+- **Demo-case mandates get authenticated on Day 9 or 10, never earlier.** Seeding plans
+  and subscriptions early is fine; authenticating a card mandate early is not — the token
+  is dead three days later and you find out on the morning of the demo.
 - 30 Payment Links max per test business. Never create links inside a batch run.
 - Manual charge of domestic cards is unsupported — that path goes via Payment Link.
 - Razorpay's own auto-retries fire T+1, T+2, T+3. Salvage's manual invoice charges do **not** consume that budget — this is the product's key lever, do not accidentally design it away.

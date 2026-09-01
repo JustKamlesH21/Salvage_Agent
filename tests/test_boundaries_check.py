@@ -104,6 +104,37 @@ class TestAppendOnly:
         assert cb.check_append_only(path, tree, text) == []
 
 
+class TestScanCoverage:
+    """The scan must not have blind spots.
+
+    On day 0 SDK_SCAN_ROOTS was `[api/]` with scripts/ deliberately carved out.
+    `make verify` stayed green the whole time, because the exemption lived
+    inside the checker: the harness could not catch it, being the thing at
+    fault. These tests are the structural fix — a directory that appears later
+    cannot quietly fall outside the scan.
+    """
+
+    def test_every_top_level_python_directory_is_scanned(self) -> None:
+        uncovered = [p for p in cb.top_level_python_dirs() if p not in cb.SDK_SCAN_ROOTS]
+        assert uncovered == [], (
+            f"{[p.name for p in uncovered]} contain Python but are outside SDK_SCAN_ROOTS, "
+            f"so nothing stops them importing the Razorpay SDK. Add them to the list in "
+            f"scripts/check_boundaries.py — CLAUDE.md invariant 1 has no exceptions."
+        )
+
+    def test_the_scan_actually_reaches_the_scripts_directory(self) -> None:
+        # The specific hole that existed on day 0, pinned by name.
+        scanned = cb.python_files(cb.SDK_SCAN_ROOTS)
+        assert any(p.name == "seed_razorpay.py" for p in scanned)
+
+    def test_only_the_executor_client_is_allowlisted(self) -> None:
+        assert {cb.ROOT / "api" / "executor" / "client.py"} == cb.SDK_ALLOWED
+
+    def test_discovery_ignores_artefact_directories(self) -> None:
+        names = {p.name for p in cb.top_level_python_dirs()}
+        assert not (names & cb.NOT_SOURCE)
+
+
 class TestWholeRepo:
     def test_check_passes_on_the_current_tree(self) -> None:
         assert cb.main() == 0
