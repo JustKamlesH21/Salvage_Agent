@@ -193,11 +193,29 @@ the payment entity is still an assumption. Day 3's taxonomy is built on that
 shape. The first captured `payment.failed` settles it, and the answer goes here
 before any work starts on `taxonomy/failure_classes.yaml`.
 
-**HMAC parity with Razorpay: unverified.** Every committed fixture is signed
-with `salvage_fixture_webhook_secret`, which proves our verification is
-self-consistent, not that it matches Razorpay's. `tests/local_only/` closes
-that gap and needs a real capture. Result goes here once it runs. Until then
-the gap is open, and saying so is the point.
+**HMAC parity with Razorpay: run, and it FAILED — 33 of 33, gap still open.**
+`tests/local_only/test_real_signature.py` ran against all 33 real captures with
+`RAZORPAY_WEBHOOK_SECRET` from `.env`. Every single one failed to verify;
+the negative-case test (a tampered body against the real secret) correctly
+failed too, confirming the test itself works. A 33/33 failure rate, uniform
+rather than scattered, points at a constant mismatch rather than data
+corruption — `capture_webhooks.py` never touches the raw bytes (see its
+docstring), so intermittent corruption would show as intermittent failures,
+not total ones.
+
+**Most likely cause:** `.env`'s `RAZORPAY_WEBHOOK_SECRET` was updated after the
+Dashboard webhook was already created with a different secret value, and the
+two were never re-synced.
+
+**Not yet fixed.** Doesn't block committing fixtures — every committed fixture
+is self-signed with the throwaway `salvage_fixture_webhook_secret`, which is
+unaffected by this. But it means the actual question — *does our HMAC
+implementation match Razorpay's* — is still open, not closed, going into day 2.
+**Before day 2 builds ingest, re-sync the secret** (Settings → Webhooks → the
+webhook → check/copy its secret into `.env`) and re-run
+`tests/local_only/test_real_signature.py` to confirm parity for real.
+*Class:* other — configuration, not a code bug, but a real gap to close before
+trusting HMAC verification against production traffic.
 
 ---
 
@@ -255,3 +273,88 @@ confirmed, but the runbook still says to re-verify against the live page if
 Razorpay's list ever changes, since this repo's copy will not update itself.
 
 *Class:* other — platform constraint, now resolved rather than merely logged.
+
+---
+
+### 2026-09-01 — day 1 close: fixtures captured, Phase 1 findings **demo**
+
+33 real webhook deliveries captured, redacted, and committed to
+`tests/fixtures/`. All 6 required event types present:
+`payment.failed`, `subscription.charged`, `invoice.paid`, `subscription.halted`,
+`payment_link.paid`, plus bonus real coverage of `payment.authorized`,
+`payment.captured`, `order.paid`, `subscription.authenticated`,
+`subscription.activated`. **Missing: `subscription.pending`** — never appeared
+across 33 captures, including both times a charge failed. Accepted as an open
+gap rather than chased further; it carries no error data, so it doesn't block
+the normaliser or taxonomy, only Phase 2's state-machine handling.
+
+**Payment links consumed: 1 of 30.** `plink_TWkzpIT0B82OiQ`, reused for both a
+decline attempt and the final paid attempt rather than spending two — a payment
+link accepts a retry after a failed attempt. 29 remain.
+
+**Card tokens created and their real 3-day expiry:**
+
+| Card token | last4 | Subscription | Created (UTC) | Dead from (UTC) |
+|---|---|---|---|---|
+| `card_TWkJxareLJjBrt` | 4366 | `sub_business` (`sub_TWf80TVDUE1ABy`) | 2026-09-01 10:52 | 2026-09-04 10:52 |
+| `card_TWkOU7zmIRscvm` | 4366 | `sub_enterprise` (`sub_TWf82A8VpuRH7d`) | 2026-09-01 10:56 | 2026-09-04 10:56 |
+| `card_TWl0UHQhBItr7s` | 0001 | payment link (decline attempt) | 2026-09-01 11:32 | 2026-09-04 11:32 |
+| `card_TWl2zj130w7h2J` | 4366 | payment link (paid) | 2026-09-01 11:34 | 2026-09-04 11:34 |
+
+None of these are demo-case mandates — all four are fixture-capture only, per
+the day-1 rule, and are expected to expire on schedule. `sub_mf` and
+`sub_halt_clock` remain unauthenticated.
+
+**Real payloads vs SPEC §4.1 — three findings, none of them small.**
+
+1. **`error_source`/`error_step`/`error_reason` are not reliably populated.**
+   The first `payment.failed` we captured (forced via the Dashboard's
+   "Charge this now" trigger) had only `error_code` and `error_description`
+   set; the other three were `null`. A later one, via a genuine decline card on
+   a Payment Link, had all five fields populated. **Conclusion: the normaliser
+   cannot assume all five fields exist — it must handle a partial shape as a
+   real, non-rare case, not an edge case.** This is a design input for day 3,
+   not a nice-to-have.
+
+2. **Razorpay's documented test-card decline reasons did not reproduce.**
+   `4100 2800 0008 0001` is documented as producing `error_code: insufficient_fund`.
+   What we actually got: `error_code: BAD_REQUEST_ERROR`,
+   `error_reason: payment_failed` — generic, not the specific reason the docs
+   promised. One data point only; we did not get a second decline to confirm
+   whether this generalises. **Open question for whoever builds the taxonomy:**
+   test-mode declines may only ever produce this one generic reason, meaning
+   `taxonomy/failure_classes.yaml`'s specific reason-string mappings
+   (`insufficient_funds`, `card_expired`, etc.) may be untestable against real
+   test-mode traffic at all, and can only be exercised via the simulator (§5.9)
+   or synthetic fixtures built by hand — not verified against a live capture.
+
+3. **The Dashboard's "Charge this now" test trigger does not simulate a
+   real decline.** Its only observed failure mode, twice, identically:
+   `BAD_REQUEST_ERROR` / "Mandate debit not as per frequency" — Razorpay's own
+   mandate-timing rule rejecting a charge forced before the invoice's natural
+   due date. This is a test-mode artifact of forcing a charge early, not a
+   simulation of a card or bank decline. **It cannot be used to generate
+   taxonomy-relevant failure fixtures**, only to test the halt/recovery state
+   machine.
+
+**Zero-retry halt, no `subscription.pending` — contradicts the T+1/T+2/T+3
+model everywhere it's stated.** `sub_business` went `active` → one forced
+failure → `halted`, immediately, 8 seconds apart, with zero `subscription.pending`
+event in between. PRD §1, §11 and SPEC §1 all describe Razorpay's own retry as
+T=0 fail → `pending` → T+1/T+2/T+3 → `halted` — four attempts, not one, with an
+intermediate state. **Two explanations, not yet distinguished:** either the
+Dashboard's manual test-charge trigger bypasses the normal retry ladder
+entirely (most likely, since it's explicitly a test tool, not a real payment
+attempt), or the T+1/T+2/T+3 model doesn't apply the way the docs describe. This
+needs resolving before Phase 2's out-of-order test is trusted, since that test
+assumes the normal state progression. **Also observed: `halted` is not
+terminal** — a further successful "Charge this now" brought `sub_business`
+straight back to `active`. Recovery-from-halted is real and should be a case in
+the state machine, not an oversight.
+
+**HMAC parity with Razorpay: tested, and it failed — 33/33.** See the entry
+above. Real gap, open for day 2, not closed by this session.
+
+*How each was found:* live capture against a real test-mode account, not
+inferred from docs. *Class:* spec-drift (findings 1, 3, halt sequence) /
+platform constraint (finding 2) / configuration (HMAC).

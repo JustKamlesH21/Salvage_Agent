@@ -1,0 +1,6 @@
+{
+  "_note": "Signature is deliberately wrong. HMAC verification MUST reject this.",
+  "content-type": "application/json",
+  "x-razorpay-event-id": "evt_tampered_negative_case",
+  "x-razorpay-signature": "0000000000000000000000000000000000000000000000000000000000000000"
+}

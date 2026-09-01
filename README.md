@@ -9,12 +9,13 @@ a recurring charge failed, chooses the right intervention and the right moment,
 forces every money action through hard RBI compliance gates, executes it on
 Razorpay test-mode APIs, and measures recovery against a baseline.
 
-> **Status: day 1, in progress.** Scaffolding, the verification harness, the
-> MongoDB layer, and the Razorpay seed and fixture-capture machinery. No feature
-> code yet, and **no webhook fixtures captured** — day 1's gate to advance is
-> "fixtures committed" and it is not met. `make verify` fails on two steps, and
-> those failures are the accurate report of what has not been built. See PRD §11
-> for what lands when.
+> **Status: day 1 complete.** Scaffolding, the verification harness, the
+> MongoDB layer, and 33 real Razorpay test-mode webhook fixtures captured,
+> redacted and committed — all 6 required event types present. No feature code
+> yet. `make verify` fails on two steps (day-3 normaliser, day-5 gates), and
+> those failures are the accurate report of what has not been built. One real
+> gap open going into day 2: HMAC parity with Razorpay's actual webhook secret
+> is unverified — see `NOTES.md`. See PRD §11 for what lands when.
 
 ## Documents
 

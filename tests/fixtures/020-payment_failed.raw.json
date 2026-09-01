@@ -1,0 +1,62 @@
+{
+  "account_id": "acc_TWe6UUblnz38AY",
+  "contains": [
+    "payment"
+  ],
+  "created_at": 1788261873,
+  "entity": "event",
+  "event": "payment.failed",
+  "payload": {
+    "payment": {
+      "entity": {
+        "acquirer_data": {
+          "auth_code": null
+        },
+        "amount": 1500000,
+        "amount_refunded": 0,
+        "bank": null,
+        "captured": false,
+        "card": {
+          "emi": true,
+          "entity": "card",
+          "id": "card_ggjR0hN05iEK5D",
+          "iin": "999999",
+          "international": false,
+          "issuer": "UTIB",
+          "last4": "4366",
+          "name": "Redacted",
+          "network": "Visa",
+          "sub_type": "consumer",
+          "token_iin": "471860910",
+          "type": "credit"
+        },
+        "card_id": "card_ggjR0hN05iEK5D",
+        "contact": "+916472635020",
+        "created_at": 1788261560,
+        "currency": "INR",
+        "customer_id": "cust_f7cLitiqQLy7yt",
+        "description": "Axdejcrru Kvpbiys Tsn Qzwhjsdipuuj",
+        "email": "yjkedbuxxug9vse6qxiy@example.invalid",
+        "entity": "payment",
+        "error_code": "BAD_REQUEST_ERROR",
+        "error_description": "Mandate debit not as per frequency",
+        "error_reason": null,
+        "error_source": null,
+        "error_step": null,
+        "fee": null,
+        "id": "pay_f5UBBQRSS0Uet2",
+        "international": false,
+        "invoice_id": "inv_qK5JFscwoObuPJ",
+        "method": "card",
+        "notes": [],
+        "order_id": "order_hkPUH4Ob7YAzyl",
+        "refund_status": null,
+        "status": "failed",
+        "tax": null,
+        "token_id": "token_Z6SNhBGlEcRnLC",
+        "vpa": null,
+        "wallet": null
+      }
+    }
+  }
+}

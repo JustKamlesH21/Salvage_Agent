@@ -1,0 +1,85 @@
+{
+  "account_id": "acc_TWe6UUblnz38AY",
+  "contains": [
+    "payment",
+    "order"
+  ],
+  "created_at": 1788261971,
+  "entity": "event",
+  "event": "order.paid",
+  "payload": {
+    "order": {
+      "entity": {
+        "amount": 1500000,
+        "amount_due": 0,
+        "amount_paid": 1500000,
+        "attempts": 1,
+        "checkout": null,
+        "created_at": 1788261619,
+        "currency": "INR",
+        "description": null,
+        "entity": "order",
+        "id": "order_60MmXfsMt2wJhV",
+        "notes": [],
+        "offer_id": null,
+        "receipt": null,
+        "status": "paid"
+      }
+    },
+    "payment": {
+      "entity": {
+        "acquirer_data": {
+          "auth_code": null
+        },
+        "amount": 1500000,
+        "amount_refunded": 0,
+        "amount_transferred": 0,
+        "bank": null,
+        "base_amount": 1500000,
+        "captured": true,
+        "card": {
+          "emi": true,
+          "entity": "card",
+          "expiry_month": "01",
+          "expiry_year": "2099",
+          "id": "card_ggjR0hN05iEK5D",
+          "international": false,
+          "issuer": "UTIB",
+          "last4": "4366",
+          "name": "Redacted",
+          "network": "Visa",
+          "sub_type": "consumer",
+          "token_iin": "471860910",
+          "type": "credit"
+        },
+        "card_id": "card_ggjR0hN05iEK5D",
+        "contact": "+916472635020",
+        "created_at": 1788261621,
+        "currency": "INR",
+        "customer_id": "cust_f7cLitiqQLy7yt",
+        "description": "Axdejcrru Kvpbiys Tsn Qzwhjsdipuuj",
+        "email": "yjkedbuxxug9vse6qxiy@example.invalid",
+        "entity": "payment",
+        "error_code": null,
+        "error_description": null,
+        "error_reason": null,
+        "error_source": null,
+        "error_step": null,
+        "fee": 51330,
+        "id": "pay_16YfWBVYIa7MLH",
+        "international": false,
+        "invoice_id": "inv_VW8ZGmid73OpVH",
+        "method": "card",
+        "notes": [],
+        "order_id": "order_60MmXfsMt2wJhV",
+        "refund_status": null,
+        "reward": null,
+        "status": "captured",
+        "tax": 7830,
+        "token_id": "token_Z6SNhBGlEcRnLC",
+        "vpa": null,
+        "wallet": null
+      }
+    }
+  }
+}

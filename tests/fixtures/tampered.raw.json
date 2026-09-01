@@ -1,0 +1,62 @@
+{
+  "account_id": "acc_TWe6UUblnz38AY",
+  "contains": [
+    "payment"
+  ],
+  "created_at": 1788259959,
+  "entity": "event",
+  "event": "payment.authorized",
+  "payload": {
+    "payment": {
+      "entity": {
+        "acquirer_data": {
+          "auth_code": "190496"
+        },
+        "amount": 1500000,
+        "amount_refunded": 0,
+        "bank": null,
+        "captured": false,
+        "card": {
+          "emi": true,
+          "entity": "card",
+          "id": "card_ggjR0hN05iEK5D",
+          "international": false,
+          "issuer": "UTIB",
+          "last4": "4366",
+          "name": "Redacted",
+          "network": "Visa",
+          "sub_type": "consumer",
+          "token_iin": "471860910",
+          "type": "credit"
+        },
+        "card_id": "card_ggjR0hN05iEK5D",
+        "contact": "+916472635020",
+        "created_at": 1788259922,
+        "currency": "INR",
+        "customer_id": "cust_f7cLitiqQLy7yt",
+        "description": null,
+        "email": "yjkedbuxxug9vse6qxiy@example.invalid",
+        "entity": "payment",
+        "error_code": null,
+        "error_description": null,
+        "error_reason": null,
+        "error_source": null,
+        "error_step": null,
+        "fee": null,
+        "id": "pay_K9muOtF1rs27Uv",
+        "international": false,
+        "invoice_id": "inv_RIyOAZ1wjm0Mee",
+        "method": "card",
+        "notes": [],
+        "order_id": "order_NJEkPygkezRqtR",
+        "refund_status": null,
+        "reward": null,
+        "status": "authorized",
+        "tax": null,
+        "token_id": "token_Z6SNhBGlEcRnLC",
+        "vpa": null,
+        "wallet": null
+      }
+    }
+  }
+}

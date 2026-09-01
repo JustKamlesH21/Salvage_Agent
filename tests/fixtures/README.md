@@ -3,9 +3,11 @@
 Real Razorpay test-mode deliveries, redacted and re-signed. Phase 2's HMAC
 verification, idempotency and out-of-order tests all run against these.
 
-**Status: the machinery is built; no deliveries captured yet.** Everything below
-step 3 needs a browser and the Razorpay Dashboard, which is why this is a
-runbook rather than a script. Work through it in order.
+**Status: Phase 1 complete.** 33 real deliveries captured, redacted, and
+committed — all 6 required event types present. `subscription.pending` is a
+known, accepted gap. HMAC parity with Razorpay's real secret is NOT yet
+verified — see NOTES.md, it needs a re-synced `.env` and a re-run of
+`tests/local_only/` before day 2 trusts it. Full findings in NOTES.md.
 
 ---
 
@@ -225,9 +227,51 @@ payment-link count and token expiry dates in `NOTES.md`.
 
 ## Captured so far
 
-| # | File | Event | Produced by | Subscription state at capture |
+33 real deliveries captured day 1 (2026-09-01), against `sub_business`
+(`sub_TWf80TVDUE1ABy`), `sub_enterprise` (`sub_TWf82A8VpuRH7d`), and payment
+link `plink_TWkzpIT0B82OiQ`. `tampered.raw.json` is the negative case, not
+listed below. Full findings — including three real disagreements with SPEC
+§4.1 and the zero-retry halt sequence — are in `NOTES.md`, day 1 close entry.
+
+`subscription.pending` never appeared; that gap is accepted, not chased
+further (see NOTES.md for why).
+
+| # | File | Event | Produced by | Status field at capture |
 |---|---|---|---|---|
-| — | — | — | *nothing captured yet — steps 3–9 need a browser* | — |
+| 001 | `001-payment_authorized.raw.json` | `payment.authorized` | live capture, day 1 | authorized |
+| 002 | `002-payment_captured.raw.json` | `payment.captured` | live capture, day 1 | captured |
+| 003 | `003-order_paid.raw.json` | `order.paid` | live capture, day 1 | captured |
+| 004 | `004-invoice_paid.raw.json` | `invoice.paid` | live capture, day 1 | captured |
+| 005 | `005-subscription_authenticated.raw.json` | `subscription.authenticated` | live capture, day 1 | active |
+| 006 | `006-subscription_charged.raw.json` | `subscription.charged` | live capture, day 1 | active |
+| 007 | `007-subscription_activated.raw.json` | `subscription.activated` | live capture, day 1 | active |
+| 008 | `008-payment_authorized.raw.json` | `payment.authorized` | live capture, day 1 | authorized |
+| 009 | `009-payment_captured.raw.json` | `payment.captured` | live capture, day 1 | captured |
+| 010 | `010-order_paid.raw.json` | `order.paid` | live capture, day 1 | captured |
+| 011 | `011-invoice_paid.raw.json` | `invoice.paid` | live capture, day 1 | captured |
+| 012 | `012-subscription_charged.raw.json` | `subscription.charged` | live capture, day 1 | active |
+| 013 | `013-subscription_activated.raw.json` | `subscription.activated` | live capture, day 1 | active |
+| 014 | `014-subscription_authenticated.raw.json` | `subscription.authenticated` | live capture, day 1 | active |
+| 015 | `015-payment_authorized.raw.json` | `payment.authorized` | live capture, day 1 | authorized |
+| 016 | `016-payment_captured.raw.json` | `payment.captured` | live capture, day 1 | captured |
+| 017 | `017-order_paid.raw.json` | `order.paid` | live capture, day 1 | captured |
+| 018 | `018-invoice_paid.raw.json` | `invoice.paid` | live capture, day 1 | captured |
+| 019 | `019-subscription_charged.raw.json` | `subscription.charged` | live capture, day 1 | active |
+| 020 | `020-payment_failed.raw.json` | `payment.failed` | live capture, day 1 | failed |
+| 021 | `021-subscription_halted.raw.json` | `subscription.halted` | live capture, day 1 | halted |
+| 022 | `022-payment_authorized.raw.json` | `payment.authorized` | live capture, day 1 | authorized |
+| 023 | `023-payment_captured.raw.json` | `payment.captured` | live capture, day 1 | captured |
+| 024 | `024-order_paid.raw.json` | `order.paid` | live capture, day 1 | captured |
+| 025 | `025-invoice_paid.raw.json` | `invoice.paid` | live capture, day 1 | captured |
+| 026 | `026-subscription_charged.raw.json` | `subscription.charged` | live capture, day 1 | active |
+| 027 | `027-subscription_activated.raw.json` | `subscription.activated` | live capture, day 1 | active |
+| 028 | `028-payment_failed.raw.json` | `payment.failed` | live capture, day 1 | failed |
+| 029 | `029-payment_failed.raw.json` | `payment.failed` | live capture, day 1 | failed |
+| 030 | `030-payment_authorized.raw.json` | `payment.authorized` | live capture, day 1 | authorized |
+| 031 | `031-payment_captured.raw.json` | `payment.captured` | live capture, day 1 | captured |
+| 032 | `032-order_paid.raw.json` | `order.paid` | live capture, day 1 | captured |
+| 033 | `033-payment_link_paid.raw.json` | `payment_link.paid` | live capture, day 1 | captured |
+
 
 ## API vs Dashboard
 

@@ -95,7 +95,14 @@ async def capture(request: Request) -> JSONResponse:
         encoding="utf-8",
     )
 
-    print(f"captured {stem}  {len(raw):>6} bytes  sha256={digest[:12]}…")
+    # flush=True: uvicorn's stdout is line-buffered only when it's a TTY. When
+    # this process is started under run_in_background and its stdout is
+    # redirected to a file (exactly the day-1 capture setup), Python falls
+    # back to block buffering and this line can sit unflushed for the life of
+    # the process — a delivery lands on disk but never becomes visible to
+    # anything watching the log. Found on day 1: seven real deliveries wrote
+    # fixture files correctly while the terminal showed nothing.
+    print(f"captured {stem}  {len(raw):>6} bytes  sha256={digest[:12]}…", flush=True)
     # Razorpay retries on non-2xx. Always 200 so a capture is never duplicated
     # by a retry we caused ourselves.
     return JSONResponse({"status": "captured", "file": stem}, status_code=200)
