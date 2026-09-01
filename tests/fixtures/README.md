@@ -114,16 +114,18 @@ Needed before any charge event can fire.
 
 1. Open `.razorpay-manifest.json`, find `subscriptions.sub_business.short_url`.
 2. Open it in a browser.
-3. Pay with a card marked **Recurring: Yes** on Razorpay's current
-   **Test Card Details** page (Dashboard → Docs, or docs.razorpay.com).
+3. Pay with `4718 6091 0820 4366` (Visa, domestic) — Razorpay's own
+   **Test Cards for Subscriptions** table
+   (razorpay.com/docs/payments/payments/test-card-details/), the only domestic
+   card explicitly marked for subscription/mandate authentication.
 
    **`4111 1111 1111 1111` will NOT work here** — found the hard way on day 1.
    It is a one-time-success card; authenticating a subscription mandate needs a
-   card specifically enabled for recurring/tokenized payments, a different
+   card explicitly enabled for recurring/tokenized payments, a different
    Razorpay capability from "this card succeeds a payment." The sheet rejects
-   it with *"This card is not eligible for recurring payments."* Pull the
-   current recurring-eligible card from the live docs rather than trusting a
-   number written here — that list changes. See NOTES.md.
+   it with *"This card is not eligible for recurring payments."* If Razorpay
+   changes this list, re-check the docs page rather than trusting this number
+   forever — but as of day 1 it is confirmed working. See NOTES.md.
 
 4. Any future expiry, any CVV, OTP `1234` (Razorpay's test OTP page accepts
    anything).
@@ -137,12 +139,12 @@ Needed before any charge event can fire.
 ## 6. `payment.failed`, reason 1 — insufficient funds
 
 1. Open `subscriptions.sub_enterprise.short_url` from the manifest.
-2. Pay with a **recurring-eligible failure** test card — same constraint as
-   step 5 applies: a decline card also needs to be recurring-enabled to reach
-   the mandate flow at all. Check the docs page for one marked both
-   *Recurring: Yes* and a decline reason (`4000 0000 0000 0002`-style cards
-   are commonly decline-only, not necessarily recurring-eligible — verify
-   before using).
+2. Pay with `4718 6091 0820 4366` again (step 5's card is the only confirmed
+   recurring-eligible domestic card as of day 1), but choose the **Failure**
+   button on the mock bank page instead of Success, or use the OTP value
+   Razorpay documents for a forced decline. A pure decline-only card
+   (`4000 0000 0000 0002`-style) is not confirmed recurring-eligible and may
+   hit the same rejection step 5 did — don't assume it, check.
 
 **Expect:** `payment.failed`, then `subscription.pending`.
 **Fixtures 4 and 5.**

@@ -232,3 +232,26 @@ on Razorpay's site.
 *Class:* other — platform constraint, not a Salvage bug.
 *Action:* runbook step 5 amended below to name the constraint and point at the
 live source instead of a fixed card number.
+
+---
+
+### 2026-09-01 — day 1, resolved: the recurring-eligible test card
+
+Follow-up to the "not eligible for recurring payments" entry above. Fetched
+Razorpay's live **Test Card Details** page
+(razorpay.com/docs/payments/payments/test-card-details/) rather than guessing
+from memory — that list is exactly the kind of thing that goes stale if
+hardcoded from training data.
+
+**Confirmed card: `4718 6091 0820 4366`** (Visa, domestic) — the only card on
+that page's "Test Cards for Subscriptions" table, i.e. the only domestic card
+Razorpay documents as valid for subscription/mandate authentication.
+`4111 1111 1111 1111` is not on that table; it is a general one-time-payment
+success card, which is the whole mechanism behind the earlier rejection.
+
+Runbook steps 5 and 6 updated to use this card by number rather than pointing
+at "go check the docs" — a name beats a pointer once the fact is actually
+confirmed, but the runbook still says to re-verify against the live page if
+Razorpay's list ever changes, since this repo's copy will not update itself.
+
+*Class:* other — platform constraint, now resolved rather than merely logged.
