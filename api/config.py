@@ -1,0 +1,65 @@
+"""Environment contract.
+
+Every variable named in `.env.example` is declared here. Secrets come from the
+environment only (NFR-06); nothing is defaulted to a working credential.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore", case_sensitive=False
+    )
+
+    # Razorpay
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
+    razorpay_base_url: str = "https://api.razorpay.com"
+
+    # MongoDB
+    mongo_uri: str = "mongodb://127.0.0.1:27017"
+    mongo_db: str = "salvage"
+
+    # LLM — diagnosis only. Never selects a money action (invariant 2).
+    llm_provider: str = "groq"
+    llm_base_url: str = ""
+    llm_api_key: str = ""
+    llm_model: str = ""
+    llm_fallback_provider: str = ""
+    llm_fallback_base_url: str = ""
+    llm_fallback_api_key: str = ""
+    llm_fallback_model: str = ""
+    llm_template_model: str = ""
+
+    # Safety controls. DRY_RUN defaults true (invariant 8) — this default is
+    # load-bearing, not cosmetic. Do not change it to make a demo easier.
+    dry_run: bool = True
+    arm_confirm_token: str = ""
+    kill_switch: bool = False
+    audit_chain_key: str = ""
+
+    # App
+    app_env: str = "dev"
+    api_host: str = "127.0.0.1"
+    api_port: int = 8000
+    log_level: str = "INFO"
+
+    # Clocks. Stored UTC, reasoned in IST, zone always rendered (invariant 10).
+    tz: str = "UTC"
+    compliance_tz: str = Field(default="Asia/Kolkata")
+
+    # Local tunnel
+    public_webhook_url: str = ""
+    ngrok_authtoken: str = ""
+
+
+@lru_cache(maxsize=1)
+def settings() -> Settings:
+    return Settings()

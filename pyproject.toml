@@ -1,0 +1,85 @@
+[project]
+name = "salvage"
+version = "0.1.0"
+description = "Compliance-gated payment recovery agent — Razorpay Buildathon Track 03"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "motor>=3.6",
+    "pymongo>=4.9",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "python-dotenv>=1.0",
+    "apscheduler>=3.11",
+    "pyyaml>=6.0",
+    "httpx>=0.27",
+    "razorpay>=1.4",
+    "sse-starlette>=2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "mongomock-motor>=0.0.34",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "types-pyyaml>=6.0",
+]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["api*"]
+
+# ── ruff ─────────────────────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["api", "scripts", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "ASYNC", "S"]
+ignore = [
+    "S101",  # asserts are how the executor enforces the bounded action catalog
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106"]
+"scripts/*" = ["S603", "S607"]
+
+# ── mypy ─────────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+files = ["api"]
+
+[[tool.mypy.overrides]]
+module = ["motor.*", "razorpay.*", "apscheduler.*", "mongomock_motor.*"]
+ignore_missing_imports = true
+
+# ── pytest ───────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
+filterwarnings = ["error::DeprecationWarning:api.*"]
+
+# ── coverage ─────────────────────────────────────────────────────────────────
+# 100% branch coverage is required on the two modules where correctness IS the
+# product: the gate chain and the failure normaliser (PRD FR-04, FR-07).
+[tool.coverage.run]
+branch = true
+source = ["api/gates", "api/normalise"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = false
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "raise NotImplementedError"]

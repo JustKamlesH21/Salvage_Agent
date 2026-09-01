@@ -1,0 +1,35 @@
+# Secrets — never commit. .env.example is the committed contract (NFR-06).
+.env
+.env.*
+!.env.example
+atlas-credentials.env
+*.pem
+*credentials*.csv
+*api_keys*.csv
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+web/dist/
+web/.vite/
+npm-debug.log*
+
+# Local artefacts
+.DS_Store
+*.log
+scratch/

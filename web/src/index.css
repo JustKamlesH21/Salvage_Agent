@@ -1,0 +1,47 @@
+@import 'tailwindcss';
+
+/* Design tokens — SALVAGE_SPEC §6.2.
+   The subject is Indian regulated payments: mandate ledgers, RBI circulars,
+   clause numbers, stamped approvals. The design language is the stamped
+   official record, not a fintech gradient. */
+@theme {
+  --color-ink: #12263a;      /* deep official blue — primary text and chrome */
+  --color-paper: #fbfaf7;    /* cool off-white ground */
+  --color-rule: #d6d2c8;     /* hairline ledger rule */
+  --color-stamp: #b3261e;    /* BLOCKED, violation, stop */
+  --color-ledger: #1f6f4a;   /* RECOVERED, allowed */
+  --color-amber: #b26b00;    /* REPLANNED, pending, scheduled */
+  --color-dim: #6b7a88;      /* metadata, timestamps */
+
+  --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-data: 'Martian Mono', ui-monospace, 'SF Mono', monospace;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+/* Every rupee amount, id, timestamp and clause reference is tabular. Amounts
+   must align vertically down a column — this is a ledger. */
+.data {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Visible keyboard focus is a quality floor, not a feature (NFR-05). */
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
