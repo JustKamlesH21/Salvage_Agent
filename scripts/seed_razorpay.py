@@ -10,13 +10,19 @@ What it creates
 A SaaS business with an insurance arm, with a plan ladder chosen to exercise
 both branches of G3_AFA:
 
-    ₹15,000  standard   at the no-AFA limit, allowed
-    ₹15,001  standard   one rupee over, AFA required
-    ₹95,000  mf         same order of magnitude, no AFA needed because the
-                        category raises the ceiling to ₹1,00,000
+    ₹15,000    standard    at the no-AFA limit, allowed
+    ₹15,001    standard     one rupee over, AFA required
+    ₹47,500    standard     over the limit, AFA required
+    ₹47,500    insurance    SAME AMOUNT, allowed — the category raises the
+                            ceiling to ₹1,00,000
+    ₹95,000    mf           allowed near the raised ceiling
+    ₹1,05,000  insurance    over the RAISED ceiling too — AFA required even
+                            with the category
 
-Same amount, opposite verdict, decided only by category — which is what shows
-G3 is logic rather than a threshold constant.
+The ₹47,500 pair is the controlled comparison: identical amount, opposite
+verdict, the only difference being `category`. That is what shows G3 is logic
+rather than a threshold constant. A pair with different amounts would not
+demonstrate it.
 
 `category` rides in Razorpay `notes`, so it survives into the webhook payloads
 and the fixtures. Razorpay has no notion of it; it is ours (PRD §8.2).
@@ -28,8 +34,9 @@ What it does NOT create
 the demo. Subscriptions are created in `created` state; authenticating them is
 a day 9-10 step, per CLAUDE.md.
 
-**No payment links by default.** 30 per business, ever. Pass --payment-links to
-spend the two budgeted for fixture capture.
+**No payment links.** 30 per business, ever, so this script does not create
+them at all. The one budgeted for fixture capture is created by hand in runbook
+step 8, where the count is visible and deliberate.
 
 Idempotence
 -----------
@@ -88,12 +95,22 @@ PLANS: list[dict[str, Any]] = [
         "note": "₹15,001 — one rupee over, AFA required",
     },
     {
+        "key": "saas_scale",
+        "name": "Salvage SaaS — Scale",
+        "amount_paise": 4_750_000,
+        "category": "standard",
+        "period": "yearly",
+        "note": "₹47,500 standard — AFA required. Paired with insurance_term at "
+        "the identical amount to isolate category as the only variable",
+    },
+    {
         "key": "insurance_term",
         "name": "Salvage Cover — Term Life Premium",
         "amount_paise": 4_750_000,
         "category": "insurance",
         "period": "yearly",
-        "note": "₹47,500 — over ₹15,000 but insurance, so no AFA under ₹1,00,000",
+        "note": "₹47,500 insurance — no AFA under ₹1,00,000. Identical amount to "
+        "saas_scale, opposite verdict, category is the only difference",
     },
     {
         "key": "mf_elss",
@@ -104,6 +121,16 @@ PLANS: list[dict[str, Any]] = [
         "note": "₹95,000 — same magnitude as an AFA-required standard charge, "
         "allowed only because the category raises the ceiling",
     },
+    {
+        "key": "insurance_whole_life",
+        "name": "Salvage Cover — Whole Life Premium",
+        "amount_paise": 10_500_000,
+        "category": "insurance",
+        "period": "yearly",
+        "note": "₹1,05,000 — over even the raised ₹1,00,000 insurance ceiling. "
+        "AFA required despite the category. Without this, no fixture in the "
+        "seed ever exercises the raised ceiling's own upper bound.",
+    },
 ]
 
 # Subscriptions to open against those plans. `purpose` says what each is for,
@@ -112,10 +139,12 @@ SUBSCRIPTIONS: list[dict[str, Any]] = [
     {"key": "sub_business", "plan": "saas_business", "purpose": "fixture:charged+invoice_paid"},
     {"key": "sub_enterprise", "plan": "saas_enterprise", "purpose": "fixture:payment_failed"},
     {"key": "sub_mf", "plan": "mf_elss", "purpose": "fixture:afa_category_flip"},
-    # Its only job is to fail its way to halted. Forced to fail today so
-    # Razorpay's T+1/T+2/T+3 runs in the background and subscription.halted
-    # lands around day 4, before Phase 2's out-of-order test needs it.
-    {"key": "sub_halt_clock", "plan": "saas_pro", "purpose": "fixture:halted — started day 1"},
+    # Its only job is to fail its way to halted. Its T+1/T+2/T+3 clock does NOT
+    # start here: a subscription in `created` state has no mandate, so it never
+    # charges and never fails. The clock starts when someone authenticates it
+    # and forces the first failure — runbook step 5, which needs a browser.
+    # Until then subscription.halted cannot arrive at all, let alone by day 4.
+    {"key": "sub_halt_clock", "plan": "saas_pro", "purpose": "fixture:halted — clock NOT started"},
 ]
 
 

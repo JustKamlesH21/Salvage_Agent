@@ -147,7 +147,7 @@ Anything not in this list cannot be executed. The executor validates the action 
 
 The three properties the rest of this document assumes:
 
-1. **Idempotency comes from unique indexes**, not a cache. `events.rz_event_id` and `audit.idempotency_key` are both unique. No Redis in the stack.
+1. **Idempotency comes from unique indexes**, not a cache. `events.rz_event_id` is unique, and `audit` is unique on `(idempotency_key, phase)` — see PRD §8.3 v1.2 for why the pair rather than the key alone. No Redis in the stack.
 2. **`events` and `audit` are append-only and hash-chained.** Their repositories expose `insert` only, and each document carries `prev_hash` / `hash`. `scripts/verify_chain.py` proves the chain intact — run it in the video.
 3. **Case state transitions are single-document atomic** via `find_one_and_update` with a state predicate. No multi-document transactions are needed anywhere in the design.
 
@@ -300,18 +300,23 @@ Every gate module exports `CLAUSE_REF` and `RULE_TEXT`. The build fails if eithe
 def execute_action(case, decision, action, *, dry_run: bool) -> ActionResult:
     assert action.id in ACTION_CATALOG          # bounded set
     idem = f"{case.id}:{decision.id}:{action.id}"
+    if kill_switch.engaged():                   # G0_KILL first, always
+        return blocked(...)
     try:
         audit.insert(phase="pre", idempotency_key=idem, ...)   # BEFORE dispatch
     except DuplicateKeyError:
-        return audit.prior_result(idem)         # already executed, never re-dispatch
-    if kill_switch.engaged():
-        return blocked(...)
+        prior = audit.prior_result(idem)        # post row, or None
+        if prior is None:
+            return in_flight(idem)              # pre row but no post row: the
+                                                # dispatch is running or died
+                                                # mid-flight. NOT "never tried".
+        return prior                            # already executed, never re-dispatch
     result = simulate(action) if dry_run else razorpay_client.dispatch(action, idem)
     audit.insert(phase="post", response=result, ...)
     return result
 ```
 
-Nothing else in the codebase may call the Razorpay client. `scripts/check_boundaries.py` AST-walks `api/` and fails the build if the SDK is imported outside `api/executor/client.py`. Say this in the video — it is the architectural answer to *"how do we know your agent can't go rogue."*
+Nothing else in the codebase may call the Razorpay client. `scripts/check_boundaries.py` AST-walks every top-level Python directory — `api/`, `scripts/`, `sim/`, `eval/`, `tests/` — and fails the build if the SDK is imported outside `api/executor/client.py`. There are no exemptions; `scripts/seed_razorpay.py` goes through `get_razorpay_client()` like everything else. Say this in the video — it is the architectural answer to *"how do we know your agent can't go rogue."*
 
 ### 5.7 Razorpay API surface used
 

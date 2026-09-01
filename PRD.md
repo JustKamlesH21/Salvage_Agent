@@ -1,9 +1,10 @@
 # Salvage — Product Requirements Document
 
-**v1.1 · MongoDB edition**
+**v1.2 · MongoDB edition**
 Razorpay AI Buildathon 2026 · Track 03 — AI Revenue Recovery
 
-> Companion documents: `SALVAGE_SPEC.md` (architecture + research grounding), `CLAUDE.md` (repo invariants), `KICKOFF.md` (Claude Code implementation prompt).
+> Companion documents: `SALVAGE_SPEC.md` (architecture + research grounding), `CLAUDE.md` (repo invariants).
+> **Changed in v1.2 (day 0-1):** `audit` uniqueness moved to `(idempotency_key, phase)`; the hash chain is partitioned by `run_id`; `run_id` added to the `events` and `audit` shapes. All three are explained in §8.3.
 
 ---
 
@@ -119,6 +120,10 @@ Decisions are naturally document-shaped: one decision embeds its LLM diagnosis, 
   subscription_id, customer_id, invoice_id,
   amount_paise, currency, mandate_type,   // card | upi_autopay
   category,                                // standard | insurance | mf | cc_bill
+                                            // sourced from the Razorpay plan's
+                                            // notes.category at ingest time —
+                                            // Razorpay has no native concept of
+                                            // it; it is ours (day 1, seed_razorpay.py)
   state,                                   // open | recovering | recovered | terminal | exception
   opened_at, closed_at, outcome, recovered_paise,
   attempts: [{
@@ -235,6 +240,25 @@ by writing the repository tests before the executor existed.
    caller never sees an exhausted append as a successful one. A silently
    dropped audit row is worse than a failed action: the action leaves a trace
    elsewhere, the missing row leaves none.
+
+### 8.3.1 The third audit phase
+
+`audit.phase` is `pre | post` in §8.2, uniqued with `idempotency_key` in §8.3.
+A gate BLOCK also writes an audit document (SPEC §5.5: "every BLOCK writes an
+audit document with the clause reference") — decided here, on day 1, rather
+than left for day 6 to discover the collision:
+
+**`phase` gets a third value, `block`.** A BLOCK is not a pre-dispatch
+intention and not a post-dispatch result; it is neither, and forcing it into
+`pre` would collide with a genuine pre-row for the same `idempotency_key` if
+the action is later allowed at re-evaluation and actually dispatched — exactly
+the case invariant 9 exists to prevent. A `block` row is terminal for that
+decision cycle: nothing dispatches, so nothing follows it under the same key.
+
+Re-evaluation after a BLOCK computes a **new** idempotency key
+(`case.id:decision.id:action.id`, SPEC §5.6 — a new `decision.id` per
+evaluation), so a later ALLOW never collides with the earlier BLOCK. The
+`(idempotency_key, phase)` unique index holds without change.
 
 ### 8.4 Immutability
 

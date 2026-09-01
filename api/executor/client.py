@@ -1,7 +1,8 @@
 """The ONLY module in the codebase permitted to import the Razorpay SDK.
 
-CLAUDE.md invariant 1. scripts/check_boundaries.py AST-walks `api/` and fails
-the build if `razorpay` is imported anywhere else. Everything reaches Razorpay
+CLAUDE.md invariant 1. scripts/check_boundaries.py AST-walks every top-level
+Python directory in the repository and fails the build if `razorpay` is
+imported anywhere else. No exemptions, including setup scripts. Everything reaches Razorpay
 through `execute_action()` in api/executor/, which audits before it dispatches.
 
 This is the architectural answer to "how do we know your agent can't go rogue":

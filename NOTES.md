@@ -76,10 +76,13 @@ to measure. It deletes itself, in effect, on days 3 and 5.
 *How it was found:* reading the first green coverage report and not believing it.
 *Class:* other — harness honesty.
 
-**Open, for the executor phase (day 6):** where does a BLOCK audit row sit in
-the `(idempotency_key, phase)` space? A blocked action that is later allowed at
-re-evaluation must not collide with its own earlier block row. Decide before
-writing `execute_action()`, not after.
+**Resolved, day 1** (was open for day 6): `audit.phase` gets a third value,
+`block`, alongside `pre`/`post`. Re-evaluation computes a new `decision.id` and
+therefore a new `idempotency_key`, so a later ALLOW never collides with an
+earlier BLOCK under `(idempotency_key, phase)`. See PRD §8.3.1. Decided now,
+flagged by `spec-guardian`'s day-1 phase-close review, so day 6 builds
+`execute_action()` against a settled shape instead of discovering the collision
+mid-implementation.
 
 **Toolchain:** Python 3.12 is not installed on this machine. The venv is 3.13.5.
 `pyproject.toml` still declares `>=3.12` and targets `py312` for ruff and mypy.

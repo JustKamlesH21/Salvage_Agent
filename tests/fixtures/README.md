@@ -171,9 +171,13 @@ Record the link id in `NOTES.md` against the running total.
 Cannot be forced. It arrives only after Razorpay's own T+1, T+2, T+3 retries
 all fail, so it is **three real days** away.
 
-`sub_halt_clock` exists for exactly this and its clock started on day 1.
-Leave the webhook registered. When the delivery lands (expected ~day 4), run
-step 11 again and the fixture appears.
+`sub_halt_clock` exists for exactly this, but **its clock has not started.**
+A subscription in `created` state has no mandate, so it never charges and never
+fails. The three days begin only once step 5 authenticates it and forces the
+first failure — which is why step 5 does that subscription first.
+
+Once the clock is running, leave the webhook registered. When the delivery
+lands (three days later), run step 11 again and the fixture appears.
 
 `tests/ingest/test_out_of_order.py` is already written and marked `xfail`
 against this fixture, so it turns green on its own when the payload arrives.

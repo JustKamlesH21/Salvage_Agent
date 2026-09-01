@@ -26,13 +26,25 @@ Razorpay Test Mode ──webhooks──▶ [1] INGEST        day 2
 ## The two boundaries that already exist
 
 **The Razorpay SDK is imported in exactly one file.**
-`api/executor/client.py`, and nowhere else in `api/`.
-`scripts/check_boundaries.py` AST-walks the package and fails the build
-otherwise. This is the architectural answer to *"how do we know your agent can't
-go rogue"*: there is one door, and the build breaks if someone cuts a second
-one. `scripts/seed_razorpay.py` is deliberately outside the scanned roots — it
-is setup, not a runtime path, and it must never be imported by anything under
-`api/`.
+`api/executor/client.py`, and nowhere else in the repository.
+`scripts/check_boundaries.py` AST-walks `api/`, `scripts/`, `sim/`, `eval/` and
+`tests/` and fails the build otherwise. This is the architectural answer to
+*"how do we know your agent can't go rogue"*: there is one door, and the build
+breaks if someone cuts a second one.
+
+There are **no exemptions**, including for setup scripts.
+`scripts/seed_razorpay.py` reaches Razorpay through
+`api.executor.client.get_razorpay_client()` like everything else. It briefly had
+one — day 0 shipped with `scripts/` outside the scan — and `make verify` stayed
+green throughout, because the exemption lived inside the enforcement mechanism.
+`test_every_top_level_python_directory_is_scanned` now derives the scanned set
+from the repository rather than trusting a hand-maintained list, so a directory
+added later cannot fall outside it. See NOTES.md.
+
+Two boundaries, not one. `client.py` owns the SDK import; `execute_action()`
+owns the bounded A1-A10 action catalog. Setup work — creating plans, customers,
+subscriptions — passes through the first and never the second. A bounded list
+that grows to hold setup verbs has stopped being bounded.
 
 **`events` and `audit` are append-only, in two layers.**
 Their repositories expose `insert` and reads; no update, delete or replace

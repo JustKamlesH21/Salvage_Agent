@@ -1,7 +1,17 @@
 """Environment contract.
 
-Every variable named in `.env.example` is declared here. Secrets come from the
-environment only (NFR-06); nothing is defaulted to a working credential.
+Every variable the API process actually reads is declared here as a field.
+Two categories of variable in `.env.example` are deliberately absent, and
+`tests/test_config_parity.py` pins the exception list so it cannot grow by
+accident:
+
+  * `VITE_*` — read by the frontend build, never by Python.
+  * `MONGODB_USERNAME` / `MONGODB_PASSWORD` — documented as available for a
+    script that builds `MONGO_URI` from parts. No script does that yet, so
+    nothing reads them. `MONGO_URI` is what the app actually uses.
+
+Secrets come from the environment only (NFR-06); nothing here is defaulted to
+a working credential.
 """
 
 from __future__ import annotations
