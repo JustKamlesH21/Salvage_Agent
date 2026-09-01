@@ -27,6 +27,21 @@ available in the defence round.
   engineering controls, not legal advice. A production deployment needs counsel
   review.
 
+- **One safety claim about the events index is verified against real MongoDB
+  only by hand, not in CI.** `api/db/collections.py`'s `apply_indexes()`
+  creates the replacement `rz_event_id` index before dropping any superseded
+  one, which is only safe when the superseded index is at least as strong as
+  its replacement. That holds for every legacy shape this project has
+  declared — but mongomock, which the whole automated suite runs on, does
+  not model partial-index constraint semantics and cannot demonstrate the
+  one case where it doesn't hold (a document with a missing/non-boolean
+  `signature_valid` value under the old partial-index shape). The
+  reproduction lives in `tests/local_only/test_real_mongo_migration.py`,
+  which needs a reachable local `mongod` and is deliberately excluded from
+  `make verify` and CI (see `pyproject.toml`). It passed 3/3 against a real
+  MongoDB 8.3.7 on day 2 (see NOTES.md); that result is not re-checked
+  automatically on every change to `api/db/collections.py`.
+
 ## Platform
 
 - **Manual charging of a domestic card is not supported by Razorpay.** For

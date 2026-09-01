@@ -63,7 +63,7 @@ Checkout abandonment. B2B receivables. Voice. Chargebacks. Multi-gateway routing
 | ID | Feature | Notes |
 |---|---|---|
 | F01 | Webhook ingest with HMAC signature verification | `payment.failed`, `subscription.pending`, `subscription.halted`, `subscription.charged`, `invoice.paid`, `payment_link.paid` |
-| F02 | Idempotency guard | Unique index on `events.rz_event_id`; replay-safe |
+| F02 | Idempotency guard | Unique index on `events.(rz_event_id, signature_valid)`; replay-safe — see PRD §8.3 day-2 fix for why compound |
 | F03 | Immutable, hash-chained event log | Append-only repository + `prev_hash`/`hash` chain |
 | F04 | Failure normaliser | `(code, reason, source, step)` → canonical `FailureClass` |
 | F05 | LLM diagnosis with Pydantic-constrained output | Bounded enum, confidence, evidence |
@@ -148,7 +148,7 @@ Anything not in this list cannot be executed. The executor validates the action 
 
 The three properties the rest of this document assumes:
 
-1. **Idempotency comes from unique indexes**, not a cache. `events.rz_event_id` is unique, and `audit` is unique on `(idempotency_key, phase)` — see PRD §8.3 v1.2 for why the pair rather than the key alone. No Redis in the stack.
+1. **Idempotency comes from unique indexes**, not a cache. `events` is unique on `(rz_event_id, signature_valid)`, and `audit` is unique on `(idempotency_key, phase)` — see PRD §8.3 (v1.2 for the audit pair, the day-2 fix for the events pair) for why each is compound rather than on a single field. No Redis in the stack.
 2. **`events` and `audit` are append-only and hash-chained.** Their repositories expose `insert` only, and each document carries `prev_hash` / `hash`. `scripts/verify_chain.py` proves the chain intact — run it in the video.
 3. **Case state transitions are single-document atomic** via `find_one_and_update` with a state predicate. No multi-document transactions are needed anywhere in the design.
 

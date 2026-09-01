@@ -187,8 +187,21 @@ def _is_chain_race(exc: DuplicateKeyError) -> bool:
     `keyPattern` reflects the index *definition* (e.g. `{"run_id": 1,
     "prev_hash": 1}`), not attacker-controlled data, so it cannot be spoofed
     this way.
+
+    When `keyPattern` is absent entirely (an unrecognisable dup-key error —
+    real MongoDB and mongomock both send it, so this is theoretical, not a
+    live path), this defaults to True: treat it as a possible chain race,
+    retry, and let it fail loudly via `ChainAppendExhaustedError` if it
+    isn't one. The alternative default — "not a chain race" — returns
+    `IngestOutcome.DUPLICATE` and a 200, telling Razorpay to stand down for
+    an event that may never have been stored: silent loss. A wrong retry
+    only costs a few wasted attempts and a visible exception-desk row.
+    Between a quiet wrong answer and a loud one, only the loud one is
+    survivable — fail toward it always. (F6, compliance-auditor.)
     """
-    details = exc.details or {}
+    details = exc.details
+    if details is None or "keyPattern" not in details:
+        return True
     key_pattern = details.get("keyPattern") or {}
     return "prev_hash" in key_pattern
 
@@ -209,7 +222,20 @@ class EventRepository(_ChainedAppendOnly):
     collection_name = coll.EVENTS
 
     async def by_rz_event_id(self, rz_event_id: str) -> dict[str, Any] | None:
-        result: dict[str, Any] | None = await self._c.find_one({"rz_event_id": rz_event_id})
+        """The valid row for this event id, or None.
+
+        Scoped to `signature_valid: True`: the compound idempotency index
+        (api/db/collections.py) allows one invalid row and one valid row to
+        coexist per event id, so an unfiltered lookup would be ambiguous —
+        and under natural insertion order would return the forgery in
+        exactly the rotation scenario the index change exists to handle.
+        api/ingest/webhook.py's design-decisions list is explicit: "only a
+        valid signature is eligible for anything past storage." Found by
+        compliance-auditor (F3) reviewing that index change.
+        """
+        result: dict[str, Any] | None = await self._c.find_one(
+            {"rz_event_id": rz_event_id, "signature_valid": True}
+        )
         return result
 
 

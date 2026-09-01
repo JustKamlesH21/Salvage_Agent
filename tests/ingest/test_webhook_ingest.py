@@ -139,6 +139,48 @@ class TestInvalidSignature:
         assert result.document is not None
         assert result.document["signature_valid"] is False
 
+    async def test_a_replayed_invalid_signature_stays_401_not_200(
+        self, repos: Repositories
+    ) -> None:
+        # spec-guardian (D3, phase close): a DuplicateKeyError on the
+        # invalid-signature partition of the compound index was answered
+        # DUPLICATE/200 regardless of the current delivery's signature — the
+        # exact "tell Razorpay to stand down for an event never durably
+        # stored" failure _is_chain_race's own F6 fix refuses to make one
+        # layer down. Second and third invalid deliveries of the same event
+        # id must still come back 401, so Razorpay keeps retrying.
+        raw, headers = load_fixture("tampered")
+        outcomes = []
+        for _ in range(3):
+            result = await ingest_webhook(raw, headers, repos.events, webhook_secret=FIXTURE_SECRET)
+            outcomes.append(result.outcome)
+        assert outcomes == [IngestOutcome.INVALID_SIGNATURE] * 3
+        assert await repos.events.count() == 1
+
+    async def test_a_corrected_retry_after_a_misconfigured_secret_is_recovered(
+        self, repos: Repositories
+    ) -> None:
+        # The realistic trigger for D3, end to end: a misconfigured
+        # RAZORPAY_WEBHOOK_SECRET means every delivery of one event fails
+        # signature verification (401'd, stored as forensic data) until the
+        # secret is fixed. The corrected retry, signed with the real
+        # secret, must land as RECEIVED — not be silently absorbed as a
+        # duplicate of the earlier invalid rows.
+        raw, headers = load_fixture("006-subscription_charged")
+        wrong_secret = FIXTURE_SECRET + "-misconfigured"
+
+        first = await ingest_webhook(raw, headers, repos.events, webhook_secret=wrong_secret)
+        assert first.outcome is IngestOutcome.INVALID_SIGNATURE
+
+        retry_still_wrong = await ingest_webhook(
+            raw, headers, repos.events, webhook_secret=wrong_secret
+        )
+        assert retry_still_wrong.outcome is IngestOutcome.INVALID_SIGNATURE
+
+        corrected = await ingest_webhook(raw, headers, repos.events, webhook_secret=FIXTURE_SECRET)
+        assert corrected.outcome is IngestOutcome.RECEIVED
+        assert await repos.events.count() == 2
+
 
 class TestDedupe:
     async def test_the_same_event_id_replayed_100_times_produces_one_event(

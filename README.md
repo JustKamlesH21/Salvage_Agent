@@ -9,16 +9,17 @@ a recurring charge failed, chooses the right intervention and the right moment,
 forces every money action through hard RBI compliance gates, executes it on
 Razorpay test-mode APIs, and measures recovery against a baseline.
 
-> **Status: day 1 complete.** Scaffolding, the verification harness, the
-> MongoDB layer, and 33 real Razorpay test-mode webhook fixtures captured,
-> redacted and committed — all 6 required event types present. HMAC parity
-> with Razorpay's real signing is confirmed (34/34, `tests/local_only/`). No
-> feature code yet. `make verify` fails on two steps (day-3 normaliser, day-5
-> gates), and those failures are the accurate report of what has not been
-> built. Two open questions before day 3 trusts the failure taxonomy — see
-> `NOTES.md`: the halt sequence skipped `subscription.pending` entirely, and
-> Razorpay's documented decline reasons didn't reproduce in this account.
-> See PRD §11 for what lands when.
+> **Status: day 2 complete.** Scaffolding, the verification harness, the
+> MongoDB layer, 54 real Razorpay test-mode webhook fixtures captured,
+> redacted and committed (all 6 required event types present), and webhook
+> ingest — HMAC verification, idempotency, hash-chained storage
+> (`api/ingest/`). HMAC parity with Razorpay's real signing is confirmed
+> (55/55, `tests/local_only/`). `make verify` fails on two steps (day-3
+> normaliser, day-5 gates), and those failures are the accurate report of
+> what has not been built. Two open questions before day 3 trusts the
+> failure taxonomy — see `NOTES.md`: the halt sequence skipped
+> `subscription.pending` entirely, and Razorpay's documented decline reasons
+> didn't reproduce in this account. See PRD §11 for what lands when.
 
 ## Documents
 

@@ -66,8 +66,10 @@ ignore_missing_imports = true
 
 # ── pytest ───────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
-# tests/local_only/ is excluded on purpose: it needs the real webhook secret
-# and uncommitted captures, and it must never gate CI. Run it by hand.
+# tests/local_only/ is excluded on purpose: every file in it needs something
+# a standard checkout or CI run doesn't have — a real webhook secret and
+# uncommitted captures for test_real_signature.py, a reachable local mongod
+# for test_real_mongo_migration.py — and neither may ever gate CI. Run by hand.
 testpaths = ["tests"]
 norecursedirs = ["local_only", "fixtures"]
 asyncio_mode = "auto"

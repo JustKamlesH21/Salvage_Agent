@@ -35,4 +35,9 @@ npm-debug.log*
 scratch/
 .razorpay-manifest.json
 tests/fixtures/_unredacted/
-tests/local_only/
+# Only test_real_signature.py needs a secret that can't be committed
+# (the real webhook secret + uncommitted captures). Other files under
+# tests/local_only/ — e.g. test_real_mongo_migration.py, which needs only a
+# local mongod — are committed normally; norecursedirs in pyproject.toml is
+# what keeps the whole directory out of the standard test run.
+tests/local_only/test_real_signature.py

@@ -100,14 +100,14 @@ MongoDB Atlas free tier (M0). Motor (async) for the API, PyMongo for scripts and
 
 Decisions are naturally document-shaped: one decision embeds its LLM diagnosis, its policy match, and its ordered array of gate verdicts. That is a single atomic write with no joins. Idempotency and immutability are enforced with unique indexes and a hash chain rather than transactions.
 
-**Redis is dropped.** A unique index on `audit.idempotency_key` does the executor's dedupe job and a unique index on `events.rz_event_id` does the webhook's. One less moving part.
+**Redis is dropped.** A unique index on `audit.(idempotency_key, phase)` does the executor's dedupe job and a unique index on `events.(rz_event_id, signature_valid)` does the webhook's — see §8.3 for why each is compound rather than on the single field alone. One less moving part.
 
 ### 8.2 Collections
 
 ```js
 // events — append-only, raw webhook capture
 {
-  _id, rz_event_id,            // UNIQUE index — the idempotency guard
+  _id, rz_event_id,            // UNIQUE with signature_valid — the idempotency guard, §8.3
   run_id,                       // null for live; set for eval batches. v1.2 —
                                 // partitions the hash chain, see §8.3
   event_type, payload,          // raw, unparsed-then-verified body
@@ -130,6 +130,21 @@ row. `duplicate` is never a stored value either — a genuine duplicate (same
 classification the ingest endpoint returns, not a document state. See
 `api/ingest/webhook.py`'s module docstring for the implementation and
 NOTES.md's 2026-09-01 day 2 entry for how the gap was found.
+
+**An invalid signature is stored, not rejected before insert.** `signature_valid: Boolean`
+is a field on every document, not only on valid ones: a forged or
+misconfigured delivery is itself forensic data in a tamper-evident audit
+trail, and rejecting it pre-insert would mean the append-only log has no
+record that the delivery ever arrived. Only a valid signature is eligible
+for anything past storage — no case, no decision, no downstream read of
+`events` may act on a row with `signature_valid: false`.
+`EventRepository.by_rz_event_id()` enforces this at the read layer by
+filtering to `signature_valid: true`. This is the reason `rz_event_id`'s
+uniqueness (§8.3) has to be compound with `signature_valid` rather than
+global: two rows, one invalid and one valid, are a normal and expected
+shape for one event id, not a bug. Found underspecified at day-2 phase
+close (spec-guardian): this was previously only inferable from the field's
+presence, not stated as a requirement.
 
 ```js
 
@@ -190,7 +205,7 @@ NOTES.md's 2026-09-01 day 2 entry for how the gap was found.
 ### 8.3 Indexes
 
 ```js
-events:    { rz_event_id: 1 } UNIQUE
+events:    { rz_event_id: 1, signature_valid: 1 } UNIQUE   // day 2 — see below
            { received_at: -1 }
            { run_id: 1, prev_hash: 1 } UNIQUE   // v1.2 — see below
            { run_id: 1, _id: -1 }               // v1.2 — chain head lookup
@@ -259,6 +274,69 @@ by writing the repository tests before the executor existed.
    caller never sees an exhausted append as a successful one. A silently
    dropped audit row is worse than a failed action: the action leaves a trace
    elsewhere, the missing row leaves none.
+
+**Day 2 fix — `events.rz_event_id` uniqueness made compound with
+`signature_valid`.** A single index unique across every row meant a forged
+delivery (stored as forensic data — §8.2's "invalid signature is stored, not
+rejected" note above) permanently occupied its
+`rz_event_id`: after a webhook secret rotation, Razorpay's legitimately-signed
+retry of that same event would collide on the same key, get classified
+`duplicate`, and never be recorded as valid. `(rz_event_id, signature_valid)`
+UNIQUE lets one invalid row and one valid row coexist per event id —
+intentionally: `EventRepository.by_rz_event_id()` is scoped to
+`signature_valid: true` so the forgery is never the row returned. A second
+identical forgery at the same id still collides on the same
+`(id, false)` pair, but `rz_event_id` comes from the unauthenticated
+`X-Razorpay-Event-Id` header, so this bounds a *replay at one id*, not the
+number of ids an attacker can create — an idempotency property, not a rate
+limit on growth. (An earlier version of this fix used two partial unique
+indexes instead of a compound one; `compliance-auditor` found that shape left
+documents with a missing/non-boolean `signature_valid` with no uniqueness
+constraint at all, and broke index usage for an unqualified
+`find({rz_event_id})` on real MongoDB. The compound index has neither
+problem.) Found and fixed on the day-2 ingest diff; see NOTES.md's day 2
+entries and `api/db/collections.py`'s module docstring.
+
+**The legacy-index migration mechanism.** Replacing an index name does not
+remove the old one from a database that already ran an earlier startup —
+`create_index`/`create_indexes` only ever add. `api/db/collections.py`
+tracks every index name this project has ever declared and since superseded
+in `_LEGACY_INDEXES` (append-only — an entry is never removed, since an
+already-deployed database may still carry it), and `apply_indexes()`
+creates the current shape *before* dropping any legacy name, not after:
+dropping first would leave a window with no uniqueness constraint at all,
+during which a genuine duplicate could land and make every future create
+fail permanently. Create-first is safe only when the legacy index is at
+least as strong as its replacement — true for every shape this project has
+declared so far, verified against real MongoDB, not assumed — and if that
+precondition is ever violated by a future migration, the safe outcome is
+exactly what happens: the create fails, the app does not start, and the
+legacy guard is left fully intact rather than silently lost. An import-time
+check rejects any future index rename that reuses a name already listed in
+`_LEGACY_INDEXES`, since create-before-drop would otherwise create and
+immediately destroy it on every startup. `tests/db_history.py` is the
+permanent registry of historical index shapes this mechanism is tested
+against; add an entry there whenever an index is renamed, dropped, or
+reshaped. Found and fixed across four rounds of `compliance-auditor` review
+on the day-2 diff; see NOTES.md's day-2 entries for the full account.
+
+**How a duplicate-key error of unknown shape is classified.** `_is_chain_race()`
+(`api/db/repositories.py`) decides whether a `DuplicateKeyError` on a
+chained collection is a concurrent-writer race on the hash chain (retried)
+or a genuine business-key duplicate (surfaced immediately, unretried). When
+the error carries no structured `keyPattern` at all — a shape neither real
+MongoDB nor mongomock actually produces, but not provably impossible —
+it defaults to treating it as a *possible* chain race rather than a
+confirmed duplicate. A wrong retry costs a few attempts and a visible
+exception-desk row on exhaustion; a wrong "confirmed duplicate" tells
+Razorpay to stand down (200) for an event that may never have been stored —
+silent, unrecoverable loss. Between a loud wrong answer and a quiet one,
+this project fails toward the loud one, always. The same rule governs the
+`DuplicateKeyError` branch in `api/ingest/webhook.py`: a duplicate-key
+collision on an *invalid-signature* delivery answers 401, not the 200 a
+plain duplicate would get, for the identical reason — see
+`tests/ingest/test_webhook_ingest.py::TestInvalidSignature` for the
+regression.
 
 ### 8.3.1 The third audit phase
 

@@ -8,6 +8,7 @@ Atlas M0 on day 2, when the replay test lands (PRD §11).
 from __future__ import annotations
 
 import datetime as dt
+from typing import Any
 
 import pytest
 from api.db.chain import (
@@ -26,7 +27,10 @@ from api.db.repositories import (
     _backoff,
 )
 from mongomock_motor import AsyncMongoMockClient
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo.errors import DuplicateKeyError
+
+from tests import db_history
 
 
 @pytest.fixture
@@ -34,6 +38,26 @@ async def repos() -> Repositories:
     db = AsyncMongoMockClient()["salvage_test"]
     await apply_indexes(db)
     return Repositories(db)
+
+
+@pytest.fixture
+def seeded_db() -> Any:
+    """Factory for a database that already has a *historical* index shape on
+    it before the current `apply_indexes()` ever runs — see tests/db_history.py.
+    A plain `repos` fixture always starts from an empty, freshly-created
+    database, which can never represent "a database that already ran an
+    earlier version of apply_indexes()" — the exact gap that hid F1.
+    """
+    counter = iter(range(10_000))
+
+    async def _make(*versions: str) -> AsyncIOMotorDatabase[Any]:
+        db = AsyncMongoMockClient()[f"salvage_migration_test_{next(counter)}"]
+        for version in versions:
+            await db_history.seed(db, version)
+        await apply_indexes(db)
+        return db
+
+    return _make
 
 
 def event(rz_event_id: str) -> dict[str, object]:
@@ -232,3 +256,211 @@ class TestAppendExhaustion:
         with pytest.raises(DuplicateKeyError):
             await repos.events.insert(event("evt_dup"))
         assert await repos.exceptions.find({}) == []
+
+    async def test_a_business_key_collision_whose_value_contains_prev_hash_is_not_misread(
+        self, repos: Repositories
+    ) -> None:
+        # The exact attack _is_chain_race's fix closes: rz_event_id comes
+        # from the unauthenticated X-Razorpay-Event-Id header, so an attacker
+        # can make mongomock's real DuplicateKeyError string contain the
+        # literal text "prev_hash" just by choosing that event id — no
+        # secret needed. A substring match on str(exc) would misclassify
+        # this as a chain-head race and burn all CHAIN_APPEND_ATTEMPTS
+        # retries before raising a false ChainAppendExhaustedError, instead
+        # of surfacing the DuplicateKeyError immediately as a genuine replay
+        # must. This uses the real error mongomock raises, not a constructed
+        # one, so it also proves the *value* containing "prev_hash" doesn't
+        # matter now that the check reads keyPattern.
+        doc = event("evil-prev_hash-evil")
+        await repos.events.insert(dict(doc))
+        assert "prev_hash" in str(doc["rz_event_id"])
+        with pytest.raises(DuplicateKeyError):
+            await repos.events.insert(dict(doc))
+        assert await repos.events.count() == 1
+        assert await repos.exceptions.find({}) == []
+
+    async def test_an_unrecognisable_dup_key_error_fails_loud_not_quiet(
+        self, repos: Repositories
+    ) -> None:
+        # F6 (compliance-auditor): a DuplicateKeyError with no keyPattern at
+        # all carries no evidence either way. Treating it as "not a chain
+        # race" would surface it as a plain DuplicateKeyError, which the
+        # ingest layer maps to IngestOutcome.DUPLICATE — a 200 telling
+        # Razorpay to stand down for an event that was never durably stored.
+        # It must instead be treated as a possible chain race: retried, and
+        # on exhaustion raised loudly with a visible exception-desk row.
+        async def always_contended_no_details(_: dict[str, object]) -> None:
+            raise DuplicateKeyError("E11000 duplicate key error, no structured details")
+
+        repos.events._c.insert_one = always_contended_no_details  # type: ignore[method-assign]
+
+        with pytest.raises(ChainAppendExhaustedError):
+            await repos.events.insert(event("evt_unrecognisable_dup"))
+
+        filed = await repos.exceptions.find({"reason_code": "CHAIN_APPEND_EXHAUSTED"})
+        assert len(filed) == 1
+
+
+class TestSignatureValidPartitionedIdempotency:
+    """`events.rz_event_id` uniqueness is compound with `signature_valid`
+    (day 2 fix, api/db/collections.py). A forged delivery — stored as
+    forensic data, see api/ingest/webhook.py — must not permanently block a
+    later legitimately-signed retry of the same event id after a webhook
+    secret rotation. A replayed forgery is bounded to one stored row per
+    (id, validity) pair — not growth in general, since `rz_event_id` is
+    attacker-reachable and a different id sidesteps this entirely.
+    """
+
+    async def test_a_valid_retry_after_an_invalid_row_for_the_same_event_id_succeeds(
+        self, repos: Repositories
+    ) -> None:
+        forged = event("evt_rotated")
+        forged["signature_valid"] = False
+        await repos.events.insert(forged)
+
+        legit = event("evt_rotated")
+        legit["signature_valid"] = True
+        stored = await repos.events.insert(legit)
+
+        assert stored["signature_valid"] is True
+        assert await repos.events.count() == 2
+
+    async def test_a_replayed_forgery_at_the_same_event_id_is_still_bounded(
+        self, repos: Repositories
+    ) -> None:
+        forged = event("evt_replayed_forgery")
+        forged["signature_valid"] = False
+        await repos.events.insert(dict(forged))
+        with pytest.raises(DuplicateKeyError):
+            await repos.events.insert(dict(forged))
+        assert await repos.events.count() == 1
+
+    async def test_two_valid_rows_for_the_same_event_id_still_collide(
+        self, repos: Repositories
+    ) -> None:
+        # The compound key must not weaken the original guarantee: two
+        # legitimately-signed deliveries of the same event id are still one
+        # stored row.
+        await repos.events.insert(event("evt_valid_dup"))
+        with pytest.raises(DuplicateKeyError):
+            await repos.events.insert(event("evt_valid_dup"))
+        assert await repos.events.count() == 1
+
+    async def test_by_rz_event_id_returns_the_valid_row_not_the_forgery(
+        self, repos: Repositories
+    ) -> None:
+        # F3 (compliance-auditor, day 2): with two rows now possible per
+        # event id, an unfiltered find_one is ambiguous and — under natural
+        # insertion order — returns whichever arrived first, which in the
+        # rotation story is the forgery. api/ingest/webhook.py's own
+        # design-decisions list states the rule this must not violate: "only
+        # a valid signature is eligible for anything past storage."
+        forged = event("evt_lookup")
+        forged["signature_valid"] = False
+        await repos.events.insert(forged)
+
+        legit = event("evt_lookup")
+        legit["signature_valid"] = True
+        await repos.events.insert(legit)
+
+        found = await repos.events.by_rz_event_id("evt_lookup")
+        assert found is not None
+        assert found["signature_valid"] is True
+
+    async def test_by_rz_event_id_returns_none_when_only_a_forgery_exists(
+        self, repos: Repositories
+    ) -> None:
+        forged = event("evt_only_forged")
+        forged["signature_valid"] = False
+        await repos.events.insert(forged)
+
+        assert await repos.events.by_rz_event_id("evt_only_forged") is None
+
+
+class TestIndexMigration:
+    """A plain `repos` fixture always starts from an empty, freshly-created
+    database — it can never represent "a database that already ran an
+    earlier version of apply_indexes()". This class uses `seeded_db`
+    (tests/db_history.py) to reproduce that missing state directly, because a
+    migration bug is invisible to a fixture with no history by construction —
+    a different failure mode from "the checker's scope excludes what it
+    checks" (NOTES.md's first five day-2 entries). See NOTES.md's F1 entry.
+    """
+
+    async def test_a_valid_retry_after_a_forgery_succeeds_on_a_pre_fix_database(
+        self, seeded_db: Any
+    ) -> None:
+        db = await seeded_db("day0_global_rz_event_id")
+        repos = Repositories(db)
+
+        forged = event("evt_migrated")
+        forged["signature_valid"] = False
+        await repos.events.insert(forged)
+
+        legit = event("evt_migrated")
+        legit["signature_valid"] = True
+        stored = await repos.events.insert(legit)
+
+        assert stored["signature_valid"] is True
+        assert await repos.events.count() == 2
+
+    async def test_a_valid_retry_after_a_forgery_succeeds_on_the_interim_partial_index_shape(
+        self, seeded_db: Any
+    ) -> None:
+        # F9 (compliance-auditor): the two-partial-index shape was never
+        # committed, but it was the working-tree-current shape for long
+        # enough that a real dev cluster could carry it. _LEGACY_INDEXES
+        # names it; this is the coverage that was missing for that name.
+        #
+        # The behavioural assertions below (signature_valid/count) pass
+        # whether or not the partial indexes were actually dropped — a
+        # global-unique fallback of the wrong shape passes them too, which
+        # is exactly the false-positive F11 (compliance-auditor) found this
+        # test had until db_history.seed() was fixed to preserve
+        # partialFilterExpression. The explicit index-name assertion is
+        # what actually distinguishes "migrated" from "silently wrong".
+        db = await seeded_db("day2_partial_rz_event_id")
+        repos = Repositories(db)
+
+        forged = event("evt_migrated_from_partial")
+        forged["signature_valid"] = False
+        await repos.events.insert(forged)
+
+        legit = event("evt_migrated_from_partial")
+        legit["signature_valid"] = True
+        stored = await repos.events.insert(legit)
+
+        assert stored["signature_valid"] is True
+        assert await repos.events.count() == 2
+
+        index_names = {index["name"] async for index in db["events"].list_indexes()}
+        assert index_names.isdisjoint({"uq_rz_event_id_valid", "uq_rz_event_id_invalid"})
+        assert "uq_rz_event_id_signature_valid" in index_names
+
+    async def test_a_database_carrying_every_legacy_shape_at_once_still_converges(
+        self, seeded_db: Any
+    ) -> None:
+        # A database could plausibly carry the day-0 global index AND both
+        # interim partials simultaneously (e.g. a dev cluster that lived
+        # through every shape without a clean reset). apply_indexes() must
+        # still converge to exactly the current compound index.
+        db = await seeded_db("day0_global_rz_event_id", "day2_partial_rz_event_id")
+        repos = Repositories(db)
+
+        forged = event("evt_migrated_from_everything")
+        forged["signature_valid"] = False
+        await repos.events.insert(forged)
+
+        legit = event("evt_migrated_from_everything")
+        legit["signature_valid"] = True
+        stored = await repos.events.insert(legit)
+
+        assert stored["signature_valid"] is True
+        assert await repos.events.count() == 2
+
+        index_names = {index["name"] async for index in db["events"].list_indexes()}
+        assert index_names.isdisjoint(
+            {"uq_rz_event_id", "uq_rz_event_id_valid", "uq_rz_event_id_invalid"}
+        )
+        assert "uq_rz_event_id_signature_valid" in index_names
+        assert await repos.events.count() == 2

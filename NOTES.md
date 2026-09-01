@@ -578,4 +578,468 @@ never wrong for any of the fixture data the tests used. *The fix:* read the
 driver's structured `exc.details["keyPattern"]` — the index *definition*
 (`{"run_id": 1, "prev_hash": 1}`), not attacker-reachable data — instead of
 the message string. Pinned by `tests/test_repositories.py::TestAppendExhaustion::test_a_business_key_collision_is_not_retried`
-and the equivalent HTTP-layer case in `tests/ingest/test_router.py`.
+and the equivalent HTTP-layer case in `tests/ingest/test_router.py`. Added a
+second regression using a real (not constructed) mongomock error —
+`test_a_business_key_collision_whose_value_contains_prev_hash_is_not_misread`,
+event id `evil-prev_hash-evil` — so the proof rests on the actual driver
+error shape, not an assumption about it.
+
+---
+
+### 2026-09-01 — day 2: a second real bug, plus a fifth instance of the harness-blind-spot pattern
+
+**The bug.** `events.rz_event_id` had one unique index, global. An invalid
+signature is stored, not rejected (§8.2 note above) — deliberately, as
+forensic evidence. But that means a forged delivery permanently occupies its
+`rz_event_id`: after a webhook-secret rotation, Razorpay's own
+legitimately-signed retry of that same event collides on the same key,
+gets classified `duplicate`, and is never stored as valid. The event
+vanishes rather than recovers — silently, since `duplicate` returns 200 and
+Razorpay has no reason to keep retrying a 200. *Class:* correctness — a
+genuine design gap in the idempotency scheme, not a bypass, but one that
+would have surfaced for real the first time a webhook secret rotates during
+the project, which CLAUDE.md's own "things that will bite you" list does not
+mention as a risk. *Fix:* the unique constraint on `rz_event_id` is now two
+partial indexes, one scoped to `signature_valid: true` and one to `false`
+(`api/db/collections.py`). One invalid row and one valid row can coexist per
+event id; a second identical forgery at the same id still collides within
+its own partition, so a replayed forgery still can't grow the collection
+without bound. PRD §8.3 updated in the same commit.
+
+**The fifth instance.** Implementing the fix surfaced a fifth case of day 2's
+recurring pattern (see the first day-2 entry above): `apply_indexes()` built
+every index via one bulk `db[name].create_indexes(IndexModel[...])` call.
+Against real MongoDB this is correct and passes `partialFilterExpression`
+through untouched. Against mongomock 4.3.0 — what every single test in this
+suite runs on — `create_indexes` silently drops every index option except
+`unique`, `sparse`, `name` and `expireAfterSeconds` before storing the index;
+`partialFilterExpression` is accepted and discarded with no error. Every
+existing test that exercised `rz_event_id` uniqueness would have kept passing
+with the new partial-index code in place while testing a *plain* unique
+index underneath — the harness would have said the fix worked while quietly
+testing something else. Found by writing the regression test for the fix
+itself and checking, by hand, what index `mongomock` actually stored
+(`db.delegate['events']._store.indexes`) — not something `make verify` would
+ever have caught, because every test passed either way.
+
+*The fix, same shape as the four before it:* `apply_indexes()` now calls the
+driver's `create_index()` once per declared index instead of bulk
+`create_indexes()`. `create_index` (singular) honours
+`partialFilterExpression` correctly in both mongomock and the real driver, so
+the same code path that ships to Atlas is what the test suite actually
+proves. Verified directly against `Repositories.events.insert()` before
+writing the pytest version:
+`TestSignatureValidPartitionedIdempotency::test_a_valid_retry_after_an_invalid_row_for_the_same_event_id_succeeds`
+would have failed under the old bulk-call form (the "valid" insert would
+have collided with the "invalid" one under a non-partial index) and passes
+under the fix.
+
+*Running count:* five independent instances of "the checking machinery's own
+scope, test data, or implementation quietly avoided the exact condition that
+would expose the gap" — four in the first day-2 entry, this one the fifth,
+found in a different piece of infrastructure (the test double library
+itself) than any of the first four. Worth saying on camera as one line, not
+five: *the tests all passed, and the fix still didn't work, because the tool
+the tests run on doesn't support the feature being tested and doesn't say so.*
+
+---
+
+### 2026-09-01 — day 2: a second `compliance-auditor` pass, six more findings, and a new kind of test harness
+
+A fresh, independent `compliance-auditor` pass over the `rz_event_id`
+partial-index fix above — asked explicitly to reproduce every claim, not read
+it — found six problems, two of them real production bugs (F1, F2), one a
+real gap in a *different* fix on the same diff (F3), one a hardening call
+worth making anyway (F6), and two documentation corrections (F5, plus F4 as
+part of F2's fix). All six addressed in the same commit as the original fix;
+none shipped separately.
+
+**F1 — HIGH, and a genuinely different species of bug from the five logged
+above.** The partial-index fix replaced `uq_rz_event_id` in
+`api/db/collections.py`'s `INDEXES`, but `create_index`/`create_indexes` only
+ever *add* — the old index doesn't vanish because a newer one replaced it in
+source. On the real Atlas cluster this project has been running against
+since day 0, `uq_rz_event_id` already exists from every earlier startup, so
+deploying the fix as written would have left the global constraint fully
+enforced *alongside* the new partial ones — the exact rotation bug the fix
+exists to close, still live, on the only database that matters.
+
+The first five day-2 findings all share one shape: a checker's own scope,
+test data, or implementation quietly avoided the exact condition it should
+have caught. F1 is not that. Every test in this suite builds a fresh,
+empty mongomock database — there is no checker whose *scope* excludes
+`uq_rz_event_id`, because there is no code path, anywhere, that constructs a
+database with day-0's index still on it. A fresh fixture cannot represent
+"a database that already ran an earlier version of this code" by
+construction, not by oversight. Five instances of a narrow checker; this one
+a test environment with no history at all. Different bug, different fix:
+not "make the check look at more," but "give the test suite something with
+a past to look at."
+
+**The fix — a migration-test harness, built for reuse.** `tests/db_history.py`
+holds `HISTORICAL_INDEXES`, one entry per index shape this project has ever
+shipped as current (today: `"day0_global_rz_event_id"`, the pre-fix global
+index), plus `seed(db, version)` to apply one directly, bypassing the current
+`apply_indexes()`. `tests/test_repositories.py`'s `seeded_db` fixture
+composes that seed with the *current* `apply_indexes()`, reproducing exactly
+what a real upgrade does. `TestIndexMigration`'s regression test seeds the
+day-0 shape, stores a forgery, and asserts a legitimate retry at the same
+event id succeeds — it failed against the partial-index fix (confirmed
+before touching `collections.py` again) and passes once `apply_indexes()`
+explicitly drops superseded index names first. Seven more phases of schema
+change are coming; this is the first entry in what should be a running list,
+not a one-off.
+
+**F2 — HIGH. The two partial indexes had an uncovered document partition.**
+`partialFilterExpression: {signature_valid: true}` and `{...: false}` between
+them cover only documents where the field is present and exactly boolean. A
+document with the field missing, `null`, or any other type matches neither
+filter and had *no* uniqueness constraint at all — never reachable today
+(`verify_signature` always returns a strict `bool`), but a structural
+weakening of a guard that used to be unconditional. Also: MongoDB only uses a
+partial index when the query provably matches its filter, so `by_rz_event_id`'s
+unqualified `find({rz_event_id})` would have silently fallen back to a
+collection scan on real Atlas — invisible in mongomock, which doesn't model
+that optimizer behaviour. **Fix:** one compound unique index,
+`(rz_event_id, signature_valid)`, no partial filter — no uncovered partition,
+and usable by any query on its prefix. This also let `apply_indexes()` go
+back to a single bulk `create_indexes()` call, since a plain compound unique
+index (unlike a partial one) survives mongomock's bulk path.
+
+**F3 — MEDIUM, a gap in the *other* half of the same diff.**
+`EventRepository.by_rz_event_id()` was an unfiltered `find_one({rz_event_id})`.
+Fine when at most one row could exist per event id; wrong the moment the
+uniqueness fix allows two. Natural insertion order returns whichever landed
+first — the forgery, in the exact rotation scenario the fix is built around
+— directly contradicting the ingest module's own stated rule ("only a valid
+signature is eligible for anything past storage"). No caller exists yet, but
+day 3's case creation will be one. **Fix:** scoped to `signature_valid: True`.
+
+**F5 — LOW, a claim that overstated itself.** The docstrings and PRD said the
+new index "bounds growth" without qualification. `rz_event_id` is
+attacker-reachable (Fix 1's whole premise), so an attacker sidesteps the
+bound entirely by varying the id. Corrected everywhere to: bounds a *replay
+at one id*, not the number of ids an attacker can create — an idempotency
+property, not a rate limit. Also added the sentence that was missing: a
+forgery and a genuine event can now coexist at the same id by design, and F3
+is what stops that from leaking into a lookup.
+
+**F6 — LOW, a hardening call rather than a live bug.** `_is_chain_race`
+defaulted to "not a chain race" when a `DuplicateKeyError` carried no
+`keyPattern` at all — theoretical, since both mongomock and real MongoDB
+(since 4.2) always send one, but the wrong default in principle: it means an
+error with no evidence either way is announced as `IngestOutcome.DUPLICATE`,
+a 200 telling Razorpay to stand down for an event that may never have been
+stored. **Flipped:** no `keyPattern` now defaults to *treat as a possible
+chain race* — retried, and failed loudly via `ChainAppendExhaustedError` on
+exhaustion if it wasn't one. A wrong retry costs a few attempts and a visible
+exception-desk row; a wrong `DUPLICATE` costs a silently lost event. Between
+a loud wrong answer and a quiet one, fail toward the loud one.
+
+*How all six were found:* a second `compliance-auditor` pass explicitly
+briefed to reproduce every claim in the first pass's fix rather than read it
+— it ran the migration scenario against a database seeded with the old
+index, checked what document shapes the partial filters actually covered,
+and grepped for callers of `by_rz_event_id`. *Class:* correctness /
+compliance (F1, F2, F3) and hardening (F5, F6) — F1 the standout, since it is
+the first entry in this project's notes that isn't "a checker's scope missed
+this" but "no checker could have had the state needed to see this at all."
+
+---
+
+### 2026-09-01 — day 2: a third `compliance-auditor` pass, and the remediation of a migration bug had its own migration bug
+
+Fixing F1 (the missing legacy-index drop) introduced a new one. Sent back for
+a third, still-more-adversarial pass — briefed explicitly to try to break the
+fix and to stress the new migration harness itself, since a harness this
+project will lean on for seven more phases deserved that scrutiny before
+being trusted. It found three more: one real (F7), one theoretical but worth
+closing (F8), and one coverage gap in the harness it was itself asked to
+stress (F9).
+
+**F7 — HIGH. The fix for "the old guard never gets removed" removed it at
+the wrong end of a window.** `apply_indexes()` dropped the legacy index
+*before* creating the replacement. Between those two statements,
+`events.rz_event_id` carried no uniqueness constraint at all — a window that
+did not exist before this remediation, since the pre-F1 code only ever
+added indexes and never dropped anything. A duplicate `rz_event_id` landing
+in that window (a rolling deploy, a SIGKILL, a transient Atlas blip between
+the two calls — none of it exotic) makes `create_indexes(unique=True)` fail
+on every subsequent startup, permanently: `apply_indexes()` raises out of
+the FastAPI lifespan, and the collection is left with FR-02's idempotency
+guard absent for good. Reproduced end to end against mongomock with a
+day-0-seeded database taking a live write in the window.
+
+**The fix is one line moved, but the reasoning matters more than the
+line.** Create the replacement index first, drop the legacy one after. Safe
+here specifically because every legacy index this project has ever declared
+is a special case of what replaces it — a global unique constraint is
+strictly stronger than the compound one that supersedes it, so any dataset
+already satisfying the old index also satisfies the new one, and the create
+step cannot fail because the old guard is still live. The general rule this
+leaves for the next migration: create-before-drop is only safe when the new
+constraint is implied by the old one holding; a future migration to a
+*stricter* index needs the reverse order, or a window is unavoidable and
+must be a documented, accepted risk rather than a default.
+
+**F8 — LOW-MEDIUM. The drop itself was a check-then-act.** Two processes
+booting at once (a rolling deploy's overlap, `uvicorn --workers N`) can both
+see the legacy index via `list_indexes()` and both call `drop_index()`; the
+loser's call fails, and on mongomock that failure carries `code=None` (the
+same "not the IndexNotFound code real MongoDB sends" quirk F1's original fix
+already had to route around) so it propagates unhandled and crashes that
+instance's boot. Fixed by re-checking existence after a failed drop:
+still-gone means a benign lost race, still-present means a real failure, and
+only the second case re-raises.
+
+**F9 — LOW, and it's about the harness, not the index code.** The
+two-partial-index shape that existed briefly between the global index and
+the compound one was never committed (confirmed:
+`git log --all -S "uq_rz_event_id_valid"` returns nothing) but was a
+working-tree-current shape for long enough that a real dev cluster could
+plausibly carry it — and `_LEGACY_INDEXES` already names both of its index
+names. `tests/db_history.py` had no historical entry for that shape, so the
+harness's own claim ("add an entry whenever an index is renamed, dropped, or
+reshaped") had gone unmet for its own most recent example. Added
+`"day2_partial_rz_event_id"`, plus a test that a database carrying *every*
+legacy shape at once (global index and both partials, simultaneously) still
+converges to exactly the current compound index.
+
+**The pattern across F1/F7/F8/F9, stated once:** fixing a migration bug is
+itself a migration, and a migration is exactly the kind of code this
+project's own fresh-fixture test suite structurally cannot verify without
+the harness built for that purpose. F7 shipped inside the very fix meant to
+close F1. The harness (`tests/db_history.py`) is now the thing that catches
+this category going forward — but only for the shapes someone remembers to
+add, which is why F9 exists too. *Class:* correctness (F7), hardening (F8),
+test-coverage (F9). *How found:* a compliance-auditor pass briefed to try to
+break its own prior fix and stress-test the harness, rather than confirm
+either.
+
+---
+
+### 2026-09-01 — day 2: a fourth `compliance-auditor` pass — the F7/F8 fixes had no test that would catch their own reversion, and F9's fixture was proving the wrong thing
+
+Sent for one more pass, briefed to try to break the F7-F9 remediation itself
+and to find a tenth issue if one existed. It found four: two high, both
+about test validity rather than production behaviour; one medium, a
+documentation claim that turned out to be false for one of the two legacy
+shapes it covered; one low, a name-collision hazard the F7 reordering
+introduced as a side effect.
+
+**F10 — HIGH. The F7 and F8 fixes shipped with zero tests that detect their
+own reversion.** Proven, not asserted: compliance-auditor moved the
+`_drop_legacy_indexes()` call back above the create loop — reintroducing F7
+verbatim — and the full suite stayed green. It then deleted the entire F8
+try/except/re-check block, leaving a bare `drop_index()` call, and the suite
+stayed green again. `TestIndexMigration`'s tests only assert the *converged*
+end state, which is identical under either ordering on a database with no
+conflicting rows in it, and `seeded_db` calls `apply_indexes()` as one
+opaque step, so no test could see the intermediate ordering at all. Two
+compliance-auditor passes' worth of fixes were one careless edit away from
+silent reversion, in the migration path for the collection FR-02's
+idempotency guard depends on.
+
+**Fix:** `tests/test_collections.py` (new), testing `apply_indexes()`'s
+internals directly rather than only its converged output. One trap
+documented there for whoever extends it: `db[name]` returns a **fresh
+wrapper object on every access** in mongomock_motor
+(`db["events"] is db["events"]` is `False`), so monkeypatching a method on
+one such wrapper silently does nothing on the next access. The ordering
+test instead wraps the whole database object (`_RecordingDB`), proxying
+`__getitem__` itself so the call log survives across accesses. Confirmed
+this test fails against both reintroduced bugs before restoring the fixes,
+then confirmed it passes again after.
+
+**F11 — HIGH, and a recurrence of F1's exact failure class inside its own
+remediation.** `tests/db_history.py`'s `seed()` used the same bulk
+`create_indexes()` call that `api/db/collections.py`'s own docstring already
+identifies as dropping `partialFilterExpression` under mongomock. Seeding
+`"day2_partial_rz_event_id"` therefore silently produced two plain
+global-unique indexes, not the real partial pair — the migration test for
+that shape was passing because it was quietly re-testing the day-0 shape a
+second time under different names. Confirmed by sabotage: removing both
+partial names from `_LEGACY_INDEXES` failed only the *third*
+(all-legacy-shapes-at-once) test; the dedicated partial-shape test stayed
+green regardless, because its assertions never actually depended on the
+partial semantics being real.
+
+This is the same root cause as F1 (a fixture that cannot represent the
+state it claims to) recurring *inside the fix for F1*, one level deeper: the
+harness meant to make migration bugs visible was itself not exercising what
+it named. **Fix:** `db_history.seed()` now creates each index individually
+via `create_index()`, the same fix `apply_indexes()` briefly used and then
+reverted (see the fourth day-2 entry) — except here it stays, because
+`seed()` has no bulk-path performance reason to avoid it. The partial-shape
+migration test also gained the same explicit index-name assertion the
+all-legacy-shapes test already had, so passing now actually requires the
+drop to have happened.
+
+**F12 — MEDIUM. The safety argument for create-before-drop was backwards in
+words and false in one case.** The docstring said the legacy index is
+*"weaker"* than its replacement — backwards; the safety condition is that
+the legacy index be **stronger**, so the create step cannot fail while it's
+still enforcing a superset of the new constraint. True for the global
+shape. **Not true for the partial shape**, and this is the one that
+matters: a partial index has no opinion on documents outside its filter, so
+two documents with a missing or non-boolean `signature_valid` are *both*
+accepted under the partial pair while violating the compound index that
+replaces it. Reproduced against real MongoDB (mongomock does not model
+partial-index constraint semantics at all, so it cannot show this):
+
+```
+two docs, same rz_event_id, signature_valid missing -> both accepted under the partials
+apply_indexes() (create-first) -> E11000 on the compound index create
+```
+
+Behaviourally this was never a live bug — `verify_signature()` always
+returns a strict `bool`, so no real document reaches this state — and the
+failure mode it describes is the *safe* one: the create raises, the FastAPI
+lifespan fails to start, and the legacy guard is left fully intact, never
+dropped. The bug was that the docstring asserted this couldn't happen
+instead of describing what happens if it does. **Fixed:** wording corrected,
+the per-shape distinction spelled out, and a new local-only, real-`mongod`
+test suite (`tests/local_only/test_real_mongo_migration.py`, same
+run-by-hand convention as `test_real_signature.py`) added specifically
+because this is the second time in this project a mongomock approximation
+has actively hidden a real-MongoDB behaviour rather than merely failing to
+model it. **Run against a live local mongod 8.3.7: 3/3 pass**, including the
+E11000 reproduction above.
+
+**F13 — LOW, a side effect of the F7 reordering itself.** Create-before-drop
+means a currently-declared index name that also happened to appear in
+`_LEGACY_INDEXES` would be created, reported as created, and then
+immediately dropped, silently, on every startup — under the old drop-first
+order the create would have won instead. No collision exists today, but
+`_LEGACY_INDEXES` is append-only by design (never shrinks), so this is a
+real hazard for a future index rename that reuses an old name. **Fixed:** a
+name-disjointness check, run at import time so a future collision fails
+loudly and immediately rather than silently eating an index on every boot.
+
+*How all four were found:* a fourth compliance-auditor pass, explicitly
+briefed to try to break the F7-F9 fixes and to try to find a tenth issue —
+not to confirm the third pass's "holds up" verdict. *Class:* test-coverage
+(F10, F11 — the harness itself was the bug, twice), documentation (F12, but
+with a real-MongoDB-only reproduction behind it), hardening (F13). Running
+total across four passes on the same ~150 lines of index code: thirteen
+findings, none of them in the money path (no gate, policy, or executor code
+exists yet to bypass), all of them in exactly the kind of infrastructure
+this project's own thesis says deserves the most scrutiny — the append-only,
+idempotency-guaranteeing layer everything else is built on.
+
+---
+
+### 2026-09-01 — day 2: a fifth `compliance-auditor` pass, one finding, and a clean verdict
+
+Explicitly briefed this time to give a direct clean-or-not verdict rather
+than hunt for a fifth round's worth of findings on principle. It reproduced
+F1 through F13 as genuinely fixed — including reverting F7 and F8 again, by
+hand, against the *new* F10 tests this time, and watching them fail
+correctly — and found exactly one new issue, low severity, not in the index
+logic at all.
+
+**F14 — LOW. The evidence file for F12 was gitignored and could never be
+committed, while production code cites it by path.** `.gitignore` excluded
+the whole of `tests/local_only/`, written for `test_real_signature.py`'s
+actual reason (needs a real secret and uncommitted captures). The new
+`test_real_mongo_migration.py` needs neither — only a reachable local
+`mongod` — but inherited the same blanket exclusion, meaning the file that
+`api/db/collections.py`'s own docstring points to as proof of F12 would
+vanish in any fresh clone, and the "3/3 pass" recorded above would become
+unreproducible the moment this working copy is gone. **Fixed:** narrowed
+`.gitignore` to the one file that actually needs it
+(`tests/local_only/test_real_signature.py`), leaving
+`test_real_mongo_migration.py` committed normally; `norecursedirs` in
+`pyproject.toml` is still what keeps the whole directory out of the
+standard run regardless of what's tracked in it. Also generalized
+`TestApplyIndexesOrdering` (F10) to iterate `_LEGACY_INDEXES`' own
+collections rather than hard-coding `"events"`, per this pass's note that
+`_LEGACY_INDEXES` is append-only and may one day name a different
+collection.
+
+**The verdict, stated plainly because CLAUDE.md asks for honest reporting,
+not just honest findings:** clean. Every fix across all five passes now has
+a test that fails when the fix is undone — checked by removing each one and
+watching the suite catch it. Thirteen real findings (fourteen counting this
+one) across four rounds of adversarial review on roughly 150 lines of index
+migration code, zero of them in a money path that doesn't exist yet (gates
+land day 5, executor day 6), all of them in exactly the layer this project's
+own submission argument rests on: the append-only, idempotency-guaranteeing
+data layer. This is the strongest single-thread demonstration in the
+project so far of what "use the subagents, don't skip them because the
+change looks small" (CLAUDE.md) actually buys — a two-file diff that looked
+finished after fix #1 and needed thirteen more rounds of scrutiny to
+actually be so.
+
+---
+
+### 2026-09-01 — day 2 phase close: `spec-guardian` found a real bug the index-audit loop missed, D3
+
+Five rounds of `compliance-auditor` scrutinised the storage layer
+(`api/db/collections.py`, `api/db/repositories.py`) until it was airtight —
+and the bug that actually reached a user was one layer up, in
+`api/ingest/webhook.py`, which none of those five passes were briefed to
+read closely because it hadn't changed since day 2 opened. `spec-guardian`,
+checking the whole diff against the PRD rather than re-auditing the index
+code, found it in one pass.
+
+**D3 — the exact "silent loss" failure mode the whole index remediation
+exists to prevent, still present one function away.** `ingest_webhook()`'s
+`except DuplicateKeyError` branch returned `IngestOutcome.DUPLICATE` (→ 200)
+unconditionally, regardless of the *current* delivery's own signature
+validity. The compound `(rz_event_id, signature_valid)` index correctly
+lets a corrected retry land as a new row after a secret rotation — but only
+if that retry doesn't itself collide with something. A second (or third)
+delivery still signed with the *wrong* secret — the realistic shape of "the
+secret is misconfigured," not an attacker — collides with the first
+invalid row on the `(id, false)` pair, and the old code answered that 200,
+telling Razorpay to stand down. The corrected retry, once the secret is
+actually fixed, then arrives on an event Razorpay has already stopped
+redelivering: permanently unrecoverable, silently.
+
+The code's own two neighbouring pieces of reasoning already said the right
+thing and were not consulted: `api/ingest/router.py`'s status-map comment
+("never 200 unless the event is durably stored... invalid signature and
+storage failure both need Razorpay to keep retrying") and
+`api/db/repositories.py`'s `_is_chain_race` docstring ("between a quiet
+wrong answer and a loud one, only the loud one is survivable"). **Fix:** the
+`DuplicateKeyError` branch now checks the current delivery's
+`signature_valid` before choosing an outcome — `INVALID_SIGNATURE` (401) if
+it's false, `DUPLICATE` (200) only if true. Pinned by two new tests in
+`tests/ingest/test_webhook_ingest.py::TestInvalidSignature`: a bare replay
+of an invalid delivery stays 401 three times running, and an end-to-end
+misconfigured-secret story (two wrong-secret deliveries, then one corrected
+one) proves the corrected retry is actually recovered as `RECEIVED`.
+Confirmed both fail against the pre-fix code and pass after, by hand.
+
+**Documentation drift, fixed in the same commit per CLAUDE.md's rule:**
+PRD §8.1 and §8.2 still described `events.rz_event_id` as a single global
+unique index after §8.3 had already been corrected — the contradiction had
+apparently been sitting in the PRD since the very first index fix. PRD §8.3
+cited §8.4 for the "invalid signature is stored" decision; §8.4 says nothing
+about it — that decision had never actually been written into the PRD as a
+requirement, only inferred from a schema field's presence (now added as its
+own note in §8.2). SALVAGE_SPEC §3 (F02) and §4.3 carried the same stale
+global-index claim. Two new PRD §8.3 paragraphs now document the legacy-index
+migration mechanism and the `_is_chain_race`/invalid-signature "fail loud"
+rule — both real, load-bearing decisions that previously existed only in
+code comments. README.md and `tests/fixtures/README.md` had stale fixture
+counts (33, last updated day 1 close) against an actual 54; README also
+still claimed "no feature code yet" with `api/ingest/` already three modules
+in — the kind of claim spec-guardian called "the cheapest possible
+unsupported claim for a judge to falsify." `LIMITATIONS.md` gained an entry
+for the one safety claim (create-before-drop's precondition, for the
+partial-index legacy shape) that is verified against real MongoDB only by
+hand, not by `make verify` or CI.
+
+*How found:* `spec-guardian`, run as the last step of phase close per the
+`phase-close` skill, reading the diff against the PRD rather than against
+its own prior findings. *Class:* correctness (D3 — a real bug, the only one
+of this entire day-2 saga to survive five rounds of storage-layer audits by
+living one function outside their brief) plus documentation drift (the
+rest). The lesson worth stating plainly: an adversarial review scoped to
+"the index code" will not find a bug in the code that calls it, no matter
+how many rounds it goes. `spec-guardian`'s job — checking the *whole* diff
+against the *contract* — is not redundant with `compliance-auditor`'s even
+when both run at the same phase close; this is the concrete case where
+skipping one would have shipped a real bug.

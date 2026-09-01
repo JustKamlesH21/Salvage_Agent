@@ -26,6 +26,45 @@ Design decisions made explicit here because PRD §8.2 underspecifies them:
     sparse; a body that fails to parse at all is the same principle taken
     one step further) — it must not 500. `event_type` is `None` when the body
     did not parse; there is nothing to extract it from.
+
+  * `rz_event_id` uniqueness is compound with `signature_valid`
+    (api/db/collections.py, day 2 fix), not global. A single unique index
+    across every row meant a forged delivery permanently occupied its event
+    id: after a webhook-secret rotation, Razorpay's legitimately-signed
+    retry of that same event would collide on the same key, get stored as
+    `DUPLICATE`, and the event would never be recorded as valid. The
+    compound key lets one invalid row and one valid row coexist per event
+    id — intentionally: `EventRepository.by_rz_event_id()` is scoped to
+    `signature_valid: True` so a forgery stored alongside a genuine row is
+    never the one returned. A second identical forgery at the same id still
+    collides on the same `(id, false)` pair, but `rz_event_id` itself comes
+    from the unauthenticated `X-Razorpay-Event-Id` header, so this bounds a
+    *replay at one id*, not the number of ids an attacker can create — an
+    idempotency property, not a rate limit.
+
+  * A delivery with no `X-Razorpay-Event-Id` header falls back to
+    `f"missing-event-id:{sha256(raw_body).hexdigest()}"` as its `rz_event_id`
+    — a content hash, not an identifier Razorpay assigned. Every one of day
+    1's 54 real captures carried the header, so this path is not exercised
+    by real traffic today, but it must still dedupe correctly rather than
+    500 or silently accept unlimited duplicates: two distinct headerless
+    bodies get distinct ids (no false collision), and the same bytes
+    replayed still hash to the same id (idempotency preserved). This
+    changes what the idempotency key *is* for this class of delivery, which
+    is why it is called out here rather than left as an inline comment.
+
+  * A duplicate-key collision on an *invalid-signature* delivery answers
+    401 (`INVALID_SIGNATURE`), never 200 (`DUPLICATE`) — the current
+    delivery's own signature validity decides the response, not merely
+    "does a row already exist for this key". Reporting `DUPLICATE` here
+    would tell Razorpay to stand down for an event never durably stored as
+    valid; the realistic trigger is a misconfigured `RAZORPAY_WEBHOOK_SECRET`,
+    where every retry before the secret is fixed would otherwise be
+    silently absorbed, leaving the corrected retry landing on an event
+    Razorpay has already stopped redelivering. Same rule `_is_chain_race`
+    applies one layer down (api/db/repositories.py): between a loud wrong
+    answer and a quiet one, fail toward the loud one. Found by
+    spec-guardian at day-2 phase close.
 """
 
 from __future__ import annotations
@@ -145,6 +184,19 @@ async def ingest_webhook(
     try:
         stored = await events.insert(document)
     except DuplicateKeyError:
+        # A DuplicateKeyError on an invalid-signature delivery must still
+        # answer 401, never 200: the router's own rule (see its
+        # _STATUS_FOR_OUTCOME comment) is "never 200 unless the event is
+        # durably stored as valid". Reporting DUPLICATE here would tell
+        # Razorpay to stand down for an event we have never accepted — the
+        # realistic trigger is a misconfigured RAZORPAY_WEBHOOK_SECRET: the
+        # first delivery is stored invalid and 401'd, and every retry before
+        # the secret is fixed would otherwise be answered 200 and absorbed,
+        # so the corrected retry that finally arrives after the fix lands on
+        # an event Razorpay has already stopped redelivering — permanently
+        # unrecoverable. Found by spec-guardian at phase close.
+        if not signature_valid:
+            return IngestResult(outcome=IngestOutcome.INVALID_SIGNATURE)
         return IngestResult(outcome=IngestOutcome.DUPLICATE)
     except ChainAppendExhaustedError as exc:
         return IngestResult(outcome=IngestOutcome.STORAGE_FAILED, detail=str(exc))

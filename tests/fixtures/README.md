@@ -3,11 +3,11 @@
 Real Razorpay test-mode deliveries, redacted and re-signed. Phase 2's HMAC
 verification, idempotency and out-of-order tests all run against these.
 
-**Status: Phase 1 complete.** 33 real deliveries captured, redacted, and
+**Status: Phase 2 complete.** 54 real deliveries captured, redacted, and
 committed — all 6 required event types present. `subscription.pending` is a
 known, accepted gap, under active investigation as part of the halt-behaviour
 question (see NOTES.md). HMAC parity with Razorpay's real secret is
-**confirmed** — 34/34, `tests/local_only/` — after finding and fixing a bug in
+**confirmed** — 55/55, `tests/local_only/` — after finding and fixing a bug in
 that test's own `.env` parsing, not in the secret or the app. Full findings in
 NOTES.md.
 
