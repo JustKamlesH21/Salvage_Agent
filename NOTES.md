@@ -474,3 +474,108 @@ clean, quotable answer to the halt-sequence question.
 2026-09-30 — past submission, won't report in time, kept only as a longer-term
 comparison point if the project timeline ever extends. The weekly probe
 (above) is the one that will actually answer the halt-sequence question.
+
+---
+
+### 2026-09-01 — day 2: the recurring pattern, named **demo**
+
+Four times now, independently, across three different days: **the checking
+machinery has a blind spot the checking machinery cannot see, because the
+blind spot is the boundary of what it was built to check.**
+
+1. **The boundary checker exempted itself.** Day 0's `check_boundaries.py`
+   shipped with `scripts/` carved out of the Razorpay-SDK scan, on the
+   reasoning that a setup script isn't a runtime path. `make verify` stayed
+   green through two full days of commits — it could not have caught this,
+   because the exemption lived inside the enforcer, not in the code it was
+   enforcing against. A prompt from outside the system found it.
+
+2. **The diagnostic re-implemented the thing it was diagnosing.** Day 1's
+   HMAC-parity test wrote its own small `.env` parser rather than importing
+   `api.config.settings()`, and that second parser didn't strip an inline
+   comment the real parser handles correctly. The test failed 33/33 in a
+   pattern that looked exactly like a wrong secret — the textbook signature
+   the debugging checklist says to check first — and the checklist was right
+   to say check it first; the mistake was in a piece of infrastructure that
+   duplicated, rather than reused, the thing under test.
+
+3. **A static check cannot see a design-level violation of the invariant it
+   enforces.** `check_boundaries.py` greps for `update_one`/`delete_one`
+   against `events`/`audit` and fails the build if it finds one — a real,
+   working check. But PRD §8.2 lists `processing_state` as
+   `received | processed | failed | duplicate`, and three of those four
+   values are literally impossible to record on an append-only row without
+   mutating it after insert. No static check flags a *schema* that implies a
+   mutation nobody has written yet. That gap surfaced during day 2's planning,
+   before any code was written, only because it was reasoned through by hand.
+
+4. **Day 0's own chain tests passed by accident, not by proof.** Every
+   hand-built fixture in `tests/test_repositories.py` used a datetime with
+   exactly zero microseconds — `dt.datetime(2026, 9, 1, 12, 0, tzinfo=dt.UTC)`
+   — which happens to survive BSON's millisecond truncation with nothing
+   lost. A real `datetime.now(dt.UTC)` call, used for the first time in day
+   2's ingest code, almost never lands on an exact millisecond, and every one
+   of day 2's chain-integrity tests failed immediately on the very first run
+   against real (mocked) storage. The chain's own hash-then-store-then-reread
+   round trip had never actually been exercised with realistic data — day 0's
+   test suite was green because its fixtures were convenient, not because the
+   code was correct. Fixed in `api/db/chain.py`'s `_encode()` (truncate to
+   millisecond precision before hashing, matching what Mongo will actually
+   persist) and pinned with a real BSON round-trip test,
+   `tests/test_chain.py::TestBsonRoundTrip`.
+
+**The shape is the same every time:** a checker's test data, scope, or
+implementation quietly avoided the exact condition that would have exposed the
+gap, and the gap was only found once something outside that narrow path — a
+real capture, a real timestamp, a real prompt — actually exercised it.
+
+**The generalisable fix is the same every time, too, and it is not "add
+another check":** derive scope and inputs from the real system rather than
+from a hand-maintained, convenient stand-in for it. `check_boundaries.py` now
+derives its scan roots from the actual repository tree
+(`top_level_python_dirs()`), not a hand-written list. The HMAC test now
+imports the real config loader instead of re-parsing `.env` itself. The chain
+now hashes at the precision the real database actually stores. Three of four
+fixes are already this shape; the fourth (processing_state) has a documented
+scoping decision rather than a mechanical fix, because no check can currently
+derive "this schema implies a mutation" automatically — that one stays a
+standing risk to reason about by hand at each new phase, not something day 2
+closed.
+
+This is the strongest "what broke" material in the project so far. Four
+independent instances of one root cause, found across four different pieces
+of infrastructure, each one caught by hitting the real thing rather than by
+reading about it. Say the general version on camera, then show one instance
+concretely (recommend #1 or #4 — #1 is the cleanest one-sentence story, #4 has
+the most satisfying "here's the failing test, here's the one-line fix" beat).
+
+*Class:* other — harness honesty, project-wide pattern.
+
+---
+
+### 2026-09-01 — day 2: a real bug, found by `compliance-auditor` on its own diff
+
+`compliance-auditor`, reviewing the day-2 ingest diff before phase close (per
+CLAUDE.md — every money-path-adjacent diff gets this), flagged
+`_is_chain_race()` in `api/db/repositories.py`. The original version matched
+`"prev_hash" in str(exc)` against the stringified `DuplicateKeyError` — which
+matches the substring anywhere in the exception's text, including inside the
+colliding *value*, not just the index name. `rz_event_id` is a business key
+sourced straight from the `X-Razorpay-Event-Id` header, which Razorpay's HMAC
+signature does not cover (it signs the body only). An attacker who set that
+header to a string containing the literal text `prev_hash` could get a
+genuine duplicate-webhook replay misclassified as a chain-head race:
+`insert()` would burn all 8 retries with backoff, raise
+`ChainAppendExhaustedError`, return a false `STORAGE_FAILED` (500) telling
+Razorpay to keep retrying a webhook that had already been durably stored, and
+file a bogus row to the exception desk.
+
+*Class:* correctness / compliance — a real bypass-adjacent bug, not a design
+question. *How it was found:* `compliance-auditor` reviewing a diff that
+looked done (tests green, boundaries green) — the finding a bare `make
+verify` pass could not have surfaced, because the substring match was
+never wrong for any of the fixture data the tests used. *The fix:* read the
+driver's structured `exc.details["keyPattern"]` — the index *definition*
+(`{"run_id": 1, "prev_hash": 1}`), not attacker-reachable data — instead of
+the message string. Pinned by `tests/test_repositories.py::TestAppendExhaustion::test_a_business_key_collision_is_not_retried`
+and the equivalent HTTP-layer case in `tests/ingest/test_router.py`.

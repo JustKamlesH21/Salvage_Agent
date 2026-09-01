@@ -19,6 +19,7 @@ from api.db.chain import (
     verify_link,
     verify_sequence,
 )
+from mongomock_motor import AsyncMongoMockClient
 
 
 def build_chain(bodies: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -47,9 +48,19 @@ class TestCanonicalJson:
         naive_utc = dt.datetime(2026, 9, 1, 10, 0)
         assert canonical_json({"ts": aware}) == canonical_json({"ts": naive_utc})
 
+    def test_sub_millisecond_precision_is_truncated_not_preserved(self) -> None:
+        # BSON's date type only stores milliseconds and truncates anything
+        # finer. A hash computed at microsecond precision would disagree with
+        # itself the moment the document round-trips through Mongo — this
+        # pins the fix at the unit level, and TestBsonRoundTrip below proves
+        # it end to end against a real (mocked) driver.
+        finer = dt.datetime(2026, 1, 1, 0, 0, 0, 34_900, tzinfo=dt.UTC)
+        truncated = dt.datetime(2026, 1, 1, 0, 0, 0, 34_000, tzinfo=dt.UTC)
+        assert canonical_json({"ts": finer}) == canonical_json({"ts": truncated})
+
     def test_nested_structures_are_encoded(self) -> None:
         payload = {"a": [{"b": dt.datetime(2026, 1, 1, tzinfo=dt.UTC)}], "c": (1, 2)}
-        assert "2026-01-01T00:00:00.000000+00:00" in canonical_json(payload)
+        assert "2026-01-01T00:00:00.000+00:00" in canonical_json(payload)
 
     def test_non_json_values_get_a_stable_string_form(self) -> None:
         class Opaque:
@@ -127,3 +138,32 @@ class TestOrdering:
         orphan = link({"n": 3}, "f" * 64)
         orphan["_id"] = 42
         assert len(order_chain([*chain, orphan])) == 2
+
+
+class TestBsonRoundTrip:
+    """A real bug, found by day 2's ingest tests, not by this file.
+
+    Day 0's own chain tests used hand-built, exactly-round-second datetimes
+    with zero microseconds — `dt.datetime(2026, 9, 1, 12, 0, tzinfo=dt.UTC)`
+    in tests/test_repositories.py. That value happens to survive BSON's
+    millisecond truncation with nothing lost, so nothing here ever exercised
+    the actual failure condition. A genuine `datetime.now(dt.UTC)` call,
+    which almost never lands on an exact millisecond, found it immediately.
+    This is the third instance of the pattern named in NOTES.md: the checking
+    machinery had a blind spot the checking machinery could not see, because
+    its own test data happened to avoid the exact condition that breaks the
+    code for real.
+    """
+
+    async def test_a_hash_survives_a_real_bson_round_trip(self) -> None:
+        db = AsyncMongoMockClient()["salvage_chain_precision_test"]
+        # Not a round number on purpose — this is what a real
+        # datetime.now(dt.UTC) call actually looks like.
+        original = dt.datetime(2026, 9, 1, 12, 0, 0, 34_900, tzinfo=dt.UTC)
+        linked = link({"received_at": original}, GENESIS_HASH)
+
+        await db.c.insert_one(dict(linked))
+        stored = await db.c.find_one({})
+
+        assert stored is not None
+        verify_link(stored)  # raises ChainBreakError if this regresses

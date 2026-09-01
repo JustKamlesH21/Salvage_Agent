@@ -1,1 +1,1 @@
-"""Placeholder package — filled in at its phase (PRD §11)."""
+"""Webhook ingest: HMAC verification, dedupe, hash-chained storage. FR-01/02/03."""

@@ -112,9 +112,26 @@ Decisions are naturally document-shaped: one decision embeds its LLM diagnosis, 
                                 // partitions the hash chain, see §8.3
   event_type, payload,          // raw, unparsed-then-verified body
   signature_valid: Boolean,
-  received_at, processing_state, // received | processed | failed | duplicate
+  received_at, processing_state, // "received", always — see note below
   prev_hash, hash                // chain, scoped to run_id
 }
+```
+
+**`processing_state` — day 2 correction.** The four values originally listed
+here (`received | processed | failed | duplicate`) are not all storable on an
+append-only, insert-only collection: `processed`/`failed` describe outcomes
+that are only knowable after downstream work in later phases, which would
+require mutating a row already written, and `events` exposes `insert` only
+(§8.4, invariant 6). Every successful insert now stores `"received"` and
+nothing else; a later phase that needs to record processing outcome does so
+by referencing `rz_event_id` from its own collection, not by updating this
+row. `duplicate` is never a stored value either — a genuine duplicate (same
+`rz_event_id` replayed) produces no new document at all, so it is a response
+classification the ingest endpoint returns, not a document state. See
+`api/ingest/webhook.py`'s module docstring for the implementation and
+NOTES.md's 2026-09-01 day 2 entry for how the gap was found.
+
+```js
 
 // cases — one per recovery episode; attempts embedded (bounded ≤ 12)
 {

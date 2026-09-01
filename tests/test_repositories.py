@@ -200,7 +200,15 @@ class TestAppendExhaustion:
     ) -> None:
         # Force every attempt to lose the head race.
         async def always_contended(_: dict[str, object]) -> None:
-            raise DuplicateKeyError("E11000 duplicate key error ... index: uq_audit_run_prev_hash")
+            # keyPattern, not just a string mentioning the field name: the
+            # chain-race classifier reads structured driver details, since
+            # the dup-key VALUE (attacker-controlled for events.rz_event_id)
+            # must never be able to spoof this by containing "prev_hash"
+            # as text. See api/db/repositories.py's _is_chain_race.
+            raise DuplicateKeyError(
+                "E11000 duplicate key error ... index: uq_audit_run_prev_hash",
+                details={"keyPattern": {"run_id": 1, "prev_hash": 1}},
+            )
 
         repos.audit._c.insert_one = always_contended  # type: ignore[method-assign]
 

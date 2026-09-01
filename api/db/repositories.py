@@ -170,8 +170,27 @@ class _ChainedAppendOnly:
 
 
 def _is_chain_race(exc: DuplicateKeyError) -> bool:
-    """True when a DuplicateKeyError came from the chain index, not a business key."""
-    return "prev_hash" in str(exc)
+    """True when a DuplicateKeyError came from the chain index, not a business key.
+
+    Reads the driver's structured `keyPattern` (the field names in the index
+    that collided), not the exception's string form. A prior version matched
+    `"prev_hash" in str(exc)`, which also matches the substring anywhere in
+    the *value* that collided — and business keys like `rz_event_id` come
+    straight from an unauthenticated header (Razorpay's HMAC signs only the
+    body). An attacker who set their event id to something containing the
+    literal text "prev_hash" could get a genuine replay misclassified as a
+    chain race: eight wasted retries with backoff, a false STORAGE_FAILED
+    500 telling Razorpay to keep retrying, and a bogus row filed to the
+    exception desk. Found by compliance-auditor on the day-2 ingest diff,
+    reproduced and confirmed before this fix.
+
+    `keyPattern` reflects the index *definition* (e.g. `{"run_id": 1,
+    "prev_hash": 1}`), not attacker-controlled data, so it cannot be spoofed
+    this way.
+    """
+    details = exc.details or {}
+    key_pattern = details.get("keyPattern") or {}
+    return "prev_hash" in key_pattern
 
 
 def _backoff(attempt: int) -> float:

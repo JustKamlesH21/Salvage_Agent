@@ -1,7 +1,8 @@
 """FastAPI application.
 
-Day 0: startup applies the indexes and /health reports the safety posture.
-Routes arrive with their phases (PRD §11).
+Startup applies the indexes and /health reports the safety posture.
+Ingest (POST /webhooks/razorpay) lands day 2. Remaining routes arrive with
+their phases (PRD §11).
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from fastapi import FastAPI
 from api.config import settings
 from api.db.client import close_client, get_db
 from api.db.collections import apply_indexes
+from api.ingest.router import router as ingest_router
 
 
 @asynccontextmanager
@@ -25,6 +27,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Salvage", version="0.1.0", lifespan=lifespan)
+app.include_router(ingest_router)
 
 
 @app.get("/health")

@@ -42,8 +42,21 @@ def _encode(value: Any) -> Any:
         return [_encode(v) for v in value]
     if isinstance(value, dt.datetime):
         # Naive datetimes are treated as UTC: everything is stored UTC (NFR-04).
+        #
+        # Millisecond precision, not microsecond: BSON's date type only stores
+        # milliseconds, truncating (not rounding) anything finer. A document
+        # hashed at microsecond precision before insert and re-hashed at
+        # whatever MongoDB actually persisted will disagree on any timestamp
+        # whose microseconds aren't already a multiple of 1000 — which real
+        # `datetime.now()` calls almost never are. Day 0's own chain tests
+        # never caught this because their fixtures used hand-built, exactly
+        # round-second datetimes with zero microseconds; day 2's ingest tests
+        # exercise a genuine `datetime.now(dt.UTC)` and found it immediately.
+        # Truncating to milliseconds here, matching BSON's own truncation
+        # (verified empirically, not assumed — see NOTES.md), makes hashing
+        # agree with storage regardless of which happens first.
         moment = value if value.tzinfo is not None else value.replace(tzinfo=dt.UTC)
-        return moment.astimezone(dt.UTC).isoformat(timespec="microseconds")
+        return moment.astimezone(dt.UTC).isoformat(timespec="milliseconds")
     if isinstance(value, dt.date):
         return value.isoformat()
     if isinstance(value, Decimal):
