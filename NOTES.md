@@ -358,3 +358,43 @@ above. Real gap, open for day 2, not closed by this session.
 *How each was found:* live capture against a real test-mode account, not
 inferred from docs. *Class:* spec-drift (findings 1, 3, halt sequence) /
 platform constraint (finding 2) / configuration (HMAC).
+
+---
+
+### 2026-09-01 — day 1 correction: HMAC parity is confirmed, not failed
+
+The "33/33 failure" entry above was wrong, and it was wrong for a specific,
+useful reason. Root cause: `tests/local_only/test_real_signature.py` had its
+own hand-rolled `.env` line parser
+(`line.partition("=")[2].strip().strip('"').strip("'")`). `.env`'s
+`RAZORPAY_WEBHOOK_SECRET` line carried an inline comment —
+`zovva5-Vejhoh-kogmyc         # you choose this when creating the webhook` —
+and `.strip()` only removes whitespace from the string's ends, not a comment
+sitting after real content. The parser read the comment as part of the secret.
+
+**The actual production config loader was never wrong.**
+`api/config.py`'s `Settings()` (pydantic-settings, wrapping python-dotenv)
+correctly parsed the same line down to `zovva5-Vejhoh-kogmyc` — confirmed by
+direct check before touching anything. So Phase 2's ingest code would have had
+the correct secret from day one; only this diagnostic script's second,
+redundant parser was broken.
+
+**This matters as a general lesson, not just a fixed bug.** The instruction to
+check in this order — trailing whitespace, wrong secret, header name, raw bytes
+— is exactly right, and "uniform failure across every payload = wrong key, not
+implementation bug" is a good heuristic. But it has a gap this case exposed:
+uniform failure can also mean *a diagnostic tool read the wrong bytes for the
+key*, which looks identical to a wrong key from the outside and isn't caught by
+"check the secret is right" if the check re-implements its own reading of it.
+The fix — reuse the real loader instead of writing a second parser — is the
+generalizable takeaway: never hand-roll a second path to a value production
+code already loads correctly.
+
+**Fix:** `real_webhook_secret()` now imports `api.config.settings()` directly.
+Re-ran `tests/local_only/` against all 33 real captures: **34/34 pass** (33
+payloads + the tampered negative case). HMAC parity with Razorpay is
+genuinely confirmed. Phase 2 ingest can trust this signing path.
+
+*How it was found:* checked in the exact order requested — repr()'d the .env
+value first, and the comment was visible immediately.
+*Class:* other — test-harness bug, not a code or secret bug.

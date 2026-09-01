@@ -11,11 +11,14 @@ Razorpay test-mode APIs, and measures recovery against a baseline.
 
 > **Status: day 1 complete.** Scaffolding, the verification harness, the
 > MongoDB layer, and 33 real Razorpay test-mode webhook fixtures captured,
-> redacted and committed — all 6 required event types present. No feature code
-> yet. `make verify` fails on two steps (day-3 normaliser, day-5 gates), and
-> those failures are the accurate report of what has not been built. One real
-> gap open going into day 2: HMAC parity with Razorpay's actual webhook secret
-> is unverified — see `NOTES.md`. See PRD §11 for what lands when.
+> redacted and committed — all 6 required event types present. HMAC parity
+> with Razorpay's real signing is confirmed (34/34, `tests/local_only/`). No
+> feature code yet. `make verify` fails on two steps (day-3 normaliser, day-5
+> gates), and those failures are the accurate report of what has not been
+> built. Two open questions before day 3 trusts the failure taxonomy — see
+> `NOTES.md`: the halt sequence skipped `subscription.pending` entirely, and
+> Razorpay's documented decline reasons didn't reproduce in this account.
+> See PRD §11 for what lands when.
 
 ## Documents
 
