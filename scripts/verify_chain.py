@@ -11,10 +11,15 @@ Three failure modes are distinguished, because they mean different things:
             → that document was edited after it was written.
   ORPHAN    a document is not reachable from genesis by prev_hash linkage
             → a document was deleted, or one was inserted out of band.
-  FORK      two documents claim the same prev_hash
-            → two writers appended to the same head. The unique index on
-              prev_hash is supposed to make this impossible; seeing it means
-              the index is missing.
+  FORK      two documents in one partition claim the same prev_hash
+            → two writers appended to the same head. The unique
+              (run_id, prev_hash) index is supposed to make this impossible;
+              seeing it means the index is missing.
+
+Chains are partitioned by run_id — one per eval run, plus the live chain — so
+every partition is walked and reported separately. A break in one run's chain
+does not invalidate the others, and saying which chain broke is the difference
+between a useful report and an alarm.
 
 An empty collection is a valid chain and is reported as such — vacuous, not
 passing under false colours.
@@ -32,7 +37,13 @@ from typing import Any
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from api.db.chain import ChainBreakError, order_chain, verify_sequence  # noqa: E402
+from api.db.chain import (  # noqa: E402
+    ChainBreakError,
+    order_chain,
+    partition_chains,
+    partition_label,
+    verify_sequence,
+)
 from api.db.collections import APPEND_ONLY  # noqa: E402
 from pymongo import ASCENDING, MongoClient  # noqa: E402
 from pymongo.errors import PyMongoError  # noqa: E402
@@ -54,37 +65,52 @@ def load_env() -> tuple[str, str]:
     return uri, db
 
 
-def verify_collection(client: MongoClient[Any], db_name: str, name: str) -> list[str]:
+def verify_partition(name: str, run_id: Any, documents: list[dict[str, Any]]) -> list[str]:
+    """Walk one run's chain. Returns the problems found, naming the partition."""
+    where = f"{name}/{partition_label(run_id)}"
     problems: list[str] = []
-    collection = client[db_name][name]
-    documents = list(collection.find({}).sort([("_id", ASCENDING)]))
-
-    if not documents:
-        print(f"chain[{name}]: 0 documents — chain is empty, nothing to verify")
-        return problems
 
     try:
         ordered = order_chain(documents)
     except ChainBreakError as exc:
-        return [f"{name}: FORK — {exc}"]
+        return [f"{where}: FORK — {exc}"]
 
     if len(ordered) != len(documents):
         reachable = {id(d) for d in ordered}
         orphans = [d for d in documents if id(d) not in reachable]
         preview = ", ".join(str(d.get("_id")) for d in orphans[:5])
         problems.append(
-            f"{name}: ORPHAN — {len(orphans)} of {len(documents)} document(s) are not reachable "
+            f"{where}: ORPHAN — {len(orphans)} of {len(documents)} document(s) are not reachable "
             f"from genesis. A document was deleted, or one was written outside the repository. "
             f"First unreachable: {preview}"
         )
 
     try:
-        checked = verify_sequence(ordered)
+        verify_sequence(ordered)
     except ChainBreakError as exc:
-        problems.append(f"{name}: MISMATCH — {exc}")
-        return problems
+        problems.append(f"{where}: MISMATCH — {exc}")
 
-    print(f"chain[{name}]: {checked} document(s) verified from genesis to head")
+    return problems
+
+
+def verify_collection(client: MongoClient[Any], db_name: str, name: str) -> list[str]:
+    collection = client[db_name][name]
+    documents = list(collection.find({}).sort([("_id", ASCENDING)]))
+
+    if not documents:
+        print(f"chain[{name}]: 0 documents — chain is empty, nothing to verify")
+        return []
+
+    partitions = partition_chains(documents)
+    problems: list[str] = []
+    for run_id in sorted(partitions, key=lambda k: (k is not None, str(k))):
+        problems += verify_partition(name, run_id, partitions[run_id])
+
+    verified = len(documents) - sum(1 for p in problems if "MISMATCH" in p or "FORK" in p)
+    print(
+        f"chain[{name}]: {len(documents)} document(s) across {len(partitions)} chain(s) "
+        f"({verified} verified from genesis to head)"
+    )
     return problems
 
 

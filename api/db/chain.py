@@ -17,9 +17,17 @@ import json
 from decimal import Decimal
 from typing import Any
 
-# The prev_hash of the first document in a chain. 64 zeros so that every
-# prev_hash in the collection is the same width and a missing link is obvious.
+# The prev_hash of the first document in a chain. An explicit sentinel, never
+# null: the uniqueness guard is a compound index on (run_id, prev_hash), and
+# MongoDB indexes a missing field and an explicit null identically. A null
+# genesis would therefore be indistinguishable from a document whose prev_hash
+# was never written — a malformed row would look like the head of a chain. 64
+# zeros also keeps every prev_hash the same width, so a bad link is obvious on
+# sight.
 GENESIS_HASH = "0" * 64
+
+# Chains are partitioned per eval run. run_id is None for the live chain.
+LIVE_RUN = None
 
 # Excluded from the hashed body: `hash` cannot hash itself, and `_id` is
 # assigned by the driver on insert, after the hash is computed.
@@ -76,6 +84,43 @@ class ChainBreakError(Exception):
     """A chained document does not match its recomputed hash or its predecessor."""
 
 
+class ChainAppendExhaustedError(Exception):
+    """A chained insert lost the head race repeatedly and never landed.
+
+    Carries the unlinked document so the caller — and the exception desk row
+    written before this is raised — holds what was going to be recorded. An
+    audit row that is silently dropped is worse than an action that failed:
+    the action leaves a trace elsewhere, the missing row leaves none.
+    """
+
+    def __init__(
+        self,
+        collection: str,
+        run_id: Any,
+        attempts: int,
+        document: dict[str, Any],
+        last_error: str,
+    ) -> None:
+        self.collection = collection
+        self.run_id = run_id
+        self.attempts = attempts
+        self.document = document
+        self.last_error = last_error
+        super().__init__(
+            f"{collection}: chain head for run_id={run_id!r} was contended {attempts} times "
+            f"without landing an append. The document was NOT written and has been filed to "
+            f"the exception desk. Check for a stuck writer on this partition, then replay it. "
+            f"Last driver error: {last_error}"
+        )
+
+
+def _short(value: Any) -> str:
+    """Abbreviate a hash for a diagnostic, without making a null look truncated."""
+    if not isinstance(value, str):
+        return repr(value)
+    return f"{value[:12]}…" if len(value) > 12 else value
+
+
 def verify_link(document: dict[str, Any]) -> None:
     """Raise ChainBreakError if a single document's own hash does not recompute."""
     stored = document.get("hash")
@@ -86,7 +131,7 @@ def verify_link(document: dict[str, Any]) -> None:
     if recomputed != stored:
         raise ChainBreakError(
             f"document {document.get('_id')!r} hash mismatch: "
-            f"stored {stored[:12]}… recomputed {recomputed[:12]}… "
+            f"stored {_short(stored)} recomputed {_short(recomputed)} "
             f"— the document was modified after insert"
         )
 
@@ -102,8 +147,8 @@ def verify_sequence(documents: list[dict[str, Any]]) -> int:
         if document.get("prev_hash") != expected_prev:
             raise ChainBreakError(
                 f"link {position} (_id={document.get('_id')!r}) claims prev_hash "
-                f"{str(document.get('prev_hash'))[:12]}… but the chain head was "
-                f"{expected_prev[:12]}… — a document was inserted, removed or reordered"
+                f"{_short(document.get('prev_hash'))} but the chain head was "
+                f"{_short(expected_prev)} — a document was inserted, removed or reordered"
             )
         verify_link(document)
         expected_prev = str(document["hash"])
@@ -122,7 +167,7 @@ def order_chain(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
         prev = str(document.get("prev_hash"))
         if prev in by_prev:
             raise ChainBreakError(
-                f"two documents claim prev_hash {prev[:12]}… "
+                f"two documents claim prev_hash {_short(prev)} "
                 f"(_id={by_prev[prev].get('_id')!r} and _id={document.get('_id')!r}) "
                 f"— the chain forked"
             )
@@ -135,3 +180,21 @@ def order_chain(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
         ordered.append(node)
         cursor = str(node.get("hash"))
     return ordered
+
+
+def partition_chains(documents: list[dict[str, Any]]) -> dict[Any, list[dict[str, Any]]]:
+    """Group documents into one chain per run_id.
+
+    Each eval run owns its own chain, so sixty batch runs append to sixty
+    independent heads instead of serialising behind one. `LIVE_RUN` (None) is
+    the live chain. A document with no run_id field falls into the live
+    partition, which matches how MongoDB indexes a missing field.
+    """
+    partitions: dict[Any, list[dict[str, Any]]] = {}
+    for document in documents:
+        partitions.setdefault(document.get("run_id", LIVE_RUN), []).append(document)
+    return partitions
+
+
+def partition_label(run_id: Any) -> str:
+    return "live" if run_id is None else f"run {run_id}"

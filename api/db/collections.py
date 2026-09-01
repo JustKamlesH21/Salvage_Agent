@@ -3,11 +3,20 @@
 Two indexes here are additions to PRD §8.3. Both are recorded in that section
 with their reasons:
 
-  * `events.prev_hash` and `audit.prev_hash` UNIQUE — two documents cannot claim
-    the same predecessor, so a concurrent double-append fails with
-    DuplicateKeyError instead of silently forking the chain. The loser retries
-    against the new head. This is the same "unique index instead of a lock"
-    move the PRD already makes for idempotency.
+  * `(run_id, prev_hash)` UNIQUE on both chained collections — two documents
+    cannot claim the same predecessor *within a chain*, so a concurrent
+    double-append fails with DuplicateKeyError instead of silently forking. The
+    loser retries against the new head. This is the same "unique index instead
+    of a lock" move the PRD already makes for idempotency.
+
+    The chain is partitioned by run_id rather than global because the eval runs
+    twenty seeds across three arms (PRD §10). Sixty runs appending to one chain
+    would serialise every audit write behind a single contended head, against
+    NFR-02's three-minute budget. One chain per run makes those appends
+    independent; run_id None is the live chain.
+
+  * `(run_id, _id)` on both — the head lookup is "newest document in this
+    partition", and the unique index above cannot serve that sort.
 
   * `audit` idempotency is UNIQUE on (idempotency_key, phase) rather than on
     idempotency_key alone, because SPEC §5.6 writes a `pre` row and a `post` row
@@ -42,7 +51,12 @@ INDEXES: dict[str, list[IndexModel]] = {
         # produces one case.
         IndexModel([("rz_event_id", ASCENDING)], unique=True, name="uq_rz_event_id"),
         IndexModel([("received_at", DESCENDING)], name="ix_received_at"),
-        IndexModel([("prev_hash", ASCENDING)], unique=True, name="uq_events_prev_hash"),
+        IndexModel(
+            [("run_id", ASCENDING), ("prev_hash", ASCENDING)],
+            unique=True,
+            name="uq_events_run_prev_hash",
+        ),
+        IndexModel([("run_id", ASCENDING), ("_id", DESCENDING)], name="ix_events_run_head"),
     ],
     CASES: [
         IndexModel([("state", ASCENDING), ("opened_at", DESCENDING)], name="ix_state_opened"),
@@ -62,7 +76,12 @@ INDEXES: dict[str, list[IndexModel]] = {
             name="uq_idempotency_phase",
         ),
         IndexModel([("case_id", ASCENDING), ("ts", ASCENDING)], name="ix_case_ts"),
-        IndexModel([("prev_hash", ASCENDING)], unique=True, name="uq_audit_prev_hash"),
+        IndexModel(
+            [("run_id", ASCENDING), ("prev_hash", ASCENDING)],
+            unique=True,
+            name="uq_audit_run_prev_hash",
+        ),
+        IndexModel([("run_id", ASCENDING), ("_id", DESCENDING)], name="ix_audit_run_head"),
     ],
     # customers uses customer_id as _id, so PRD §8.3's {_id: 1} is the implicit
     # index MongoDB already creates. Nothing to declare.

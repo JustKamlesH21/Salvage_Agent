@@ -105,10 +105,12 @@ Decisions are naturally document-shaped: one decision embeds its LLM diagnosis, 
 // events — append-only, raw webhook capture
 {
   _id, rz_event_id,            // UNIQUE index — the idempotency guard
+  run_id,                       // null for live; set for eval batches. v1.2 —
+                                // partitions the hash chain, see §8.3
   event_type, payload,          // raw, unparsed-then-verified body
   signature_valid: Boolean,
   received_at, processing_state, // received | processed | failed | duplicate
-  prev_hash, hash                // chain
+  prev_hash, hash                // chain, scoped to run_id
 }
 
 // cases — one per recovery episode; attempts embedded (bounded ≤ 12)
@@ -142,11 +144,12 @@ Decisions are naturally document-shaped: one decision embeds its LLM diagnosis, 
 // audit — append-only, hash-chained, the only record of money actions
 {
   _id, case_id, decision_id, ts, actor,     // system | scheduler | human
+  run_id,                                    // null for live; set for eval batches
   phase,                                     // pre | post
-  action, idempotency_key,                   // UNIQUE index
+  action, idempotency_key,                   // UNIQUE with phase — see §8.3
   request, response, dry_run: Boolean,
   clause_ref, note,
-  prev_hash, hash
+  prev_hash, hash                            // chain, scoped to run_id
 }
 
 // customers
@@ -165,7 +168,8 @@ Decisions are naturally document-shaped: one decision embeds its LLM diagnosis, 
 ```js
 events:    { rz_event_id: 1 } UNIQUE
            { received_at: -1 }
-           { prev_hash: 1 } UNIQUE          // v1.2 — see below
+           { run_id: 1, prev_hash: 1 } UNIQUE   // v1.2 — see below
+           { run_id: 1, _id: -1 }               // v1.2 — chain head lookup
 cases:     { state: 1, opened_at: -1 }
            { subscription_id: 1 }
            { run_id: 1, state: 1 }
@@ -173,7 +177,8 @@ decisions: { case_id: 1, created_at: 1 }
            { run_id: 1 }
 audit:     { idempotency_key: 1, phase: 1 } UNIQUE   // v1.2 — was { idempotency_key: 1 }
            { case_id: 1, ts: 1 }
-           { prev_hash: 1 } UNIQUE          // v1.2 — see below
+           { run_id: 1, prev_hash: 1 } UNIQUE   // v1.2 — see below
+           { run_id: 1, _id: -1 }               // v1.2 — chain head lookup
 customers: { _id: 1 }   // customer_id as _id; MongoDB creates this implicitly
 exceptions:{ case_id: 1 }
 ```
@@ -194,13 +199,42 @@ by writing the repository tests before the executor existed.
    the dispatch is in flight or died mid-flight, and must not be read as "never
    attempted".
 
-2. **`prev_hash` is UNIQUE on both chained collections.** Two writers reading
-   the same chain head would both compute the same `prev_hash` and fork the
-   chain silently. With the index, the second insert fails with
-   `DuplicateKeyError`, and the repository retries against the new head. This is
-   the same *unique index instead of a lock* move §8.1 already makes for
-   idempotency, so it adds no new machinery — and it turns an invisible
+2. **`(run_id, prev_hash)` is UNIQUE on both chained collections, and the hash
+   chain is partitioned per run.** Two writers reading the same chain head
+   would both compute the same `prev_hash` and fork the chain silently. With
+   the index, the second insert fails with `DuplicateKeyError` and the
+   repository retries against the new head — the same *unique index instead of
+   a lock* move §8.1 already makes for idempotency, turning an invisible
    integrity failure into a loud one.
+
+   The index is compound on `run_id` rather than global on `prev_hash` because
+   §10 runs twenty seeds across three arms. Sixty runs appending to a single
+   chain would serialise every audit write in the batch behind one contended
+   head, against NFR-02's three-minute budget. One chain per run makes those
+   appends independent. `run_id` is `null` for the live chain, and
+   `scripts/verify_chain.py` walks and reports every partition separately — a
+   break in one run's chain does not invalidate the others.
+
+   `run_id` is therefore added to the `events` and `audit` shapes in §8.2, and
+   it is part of the hashed body: the chain commits to which run a row belongs
+   to, so a row cannot be moved between partitions undetected.
+
+3. **The first document's `prev_hash` is an explicit sentinel — 64 zeros, never
+   `null`.** MongoDB indexes a missing field and an explicit `null`
+   identically, so under the compound index a `null` genesis would be
+   indistinguishable from a document whose `prev_hash` was never written: a
+   malformed row would present as the head of a chain. This was already how
+   `api/db/chain.py` was written; it is recorded here because partitioning is
+   what makes it load-bearing rather than merely tidy.
+
+4. **A chained append that exhausts its retries is filed, never dropped.** The
+   repository retries the head race with full-jitter backoff — deterministic
+   backoff makes two colliding writers re-collide on the same schedule — and on
+   exhaustion writes a `CHAIN_APPEND_EXHAUSTED` row to `exceptions` carrying
+   the undelivered document, *then* raises `ChainAppendExhaustedError`. The
+   caller never sees an exhausted append as a successful one. A silently
+   dropped audit row is worse than a failed action: the action leaves a trace
+   elsewhere, the missing row leaves none.
 
 ### 8.4 Immutability
 

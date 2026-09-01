@@ -8,20 +8,34 @@ scripts/check_boundaries.py.
 
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
+import random
 from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorCollection, AsyncIOMotorDatabase
 from pymongo import ASCENDING, DESCENDING, ReturnDocument
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from api.db import collections as coll
-from api.db.chain import GENESIS_HASH, link
+from api.db.chain import GENESIS_HASH, LIVE_RUN, ChainAppendExhaustedError, link
 
 # How many times a chained insert re-reads the head after losing a race on the
-# unique prev_hash index. Contention is per-collection and writes are short, so
-# this is generous.
+# unique (run_id, prev_hash) index. Chains are partitioned per run, so genuine
+# contention is only between concurrent writers inside one run.
 CHAIN_APPEND_ATTEMPTS = 8
+
+# Full-jitter backoff between attempts. Without jitter, two writers that
+# collide re-read the head at the same instant and collide again on the same
+# schedule — the retry loop becomes a lockstep livelock rather than a
+# resolution. Worst case across all attempts is well under a second, which
+# keeps it inside NFR-02's batch budget.
+CHAIN_RETRY_BASE_SECONDS = 0.005
+CHAIN_RETRY_CAP_SECONDS = 0.2
+
+
+# Sentinel distinguishing "every partition" from "the live partition (None)".
+_ANY_RUN: Any = object()
 
 
 def _utcnow() -> dt.datetime:
@@ -34,66 +48,140 @@ class _ChainedAppendOnly:
 
     Deliberately narrow: it offers `insert` and read helpers, nothing else.
     Subclasses must not add a mutating method.
+
+    Chains are partitioned by `run_id` — one per eval run, plus the live chain
+    at run_id None. Every stored document carries `run_id` explicitly, because
+    it is part of the hashed body: the chain commits to which run a row belongs
+    to, so a row cannot be moved between runs undetected.
     """
 
     collection_name: str
 
-    def __init__(self, db: AsyncIOMotorDatabase[Any]) -> None:
+    def __init__(
+        self,
+        db: AsyncIOMotorDatabase[Any],
+        exceptions: ExceptionRepository | None = None,
+    ) -> None:
         self._c: AsyncIOMotorCollection[Any] = db[self.collection_name]
+        # Where an exhausted append is filed before it is raised. Injected
+        # rather than imported so this class stays insert-and-reads only.
+        self._exceptions = exceptions
 
-    async def _head_hash(self) -> str:
-        """Hash of the newest document, or GENESIS_HASH for an empty chain.
+    async def _head_hash(self, run_id: Any) -> str:
+        """Hash of the newest document in this partition, or GENESIS_HASH if empty.
 
         Read by insertion order rather than by walking the chain. Under a race
-        two writers can read the same head; the unique index on prev_hash makes
-        the loser fail with DuplicateKeyError and retry against the new head.
+        two writers can read the same head; the unique (run_id, prev_hash)
+        index makes the loser fail with DuplicateKeyError and retry against the
+        new head.
         """
-        newest = await self._c.find_one(sort=[("_id", DESCENDING)], projection={"hash": 1})
+        newest = await self._c.find_one(
+            {"run_id": run_id}, sort=[("_id", DESCENDING)], projection={"hash": 1}
+        )
         if newest is None:
             return GENESIS_HASH
         return str(newest["hash"])
 
-    async def insert(self, document: dict[str, Any]) -> dict[str, Any]:
-        """Append one hash-linked document. Returns it as stored, with `_id`.
+    async def insert(self, document: dict[str, Any], *, run_id: Any = LIVE_RUN) -> dict[str, Any]:
+        """Append one hash-linked document to `run_id`'s chain. Returns it as stored.
 
         DuplicateKeyError on a business-unique index (rz_event_id,
         idempotency_key) propagates to the caller — that is the idempotency
-        signal, not an error to swallow.
+        signal, not an error to swallow. Only a collision on the chain head is
+        retried.
+
+        Raises ChainAppendExhaustedError if the head stays contended. The
+        document is filed to the exception desk first, so a chained row is
+        never lost silently.
         """
-        last_error: DuplicateKeyError | None = None
-        for _ in range(CHAIN_APPEND_ATTEMPTS):
-            linked = link(document, await self._head_hash())
+        body = dict(document)
+        carried = body.get("run_id", run_id)
+        if carried != run_id:
+            raise ValueError(
+                f"{self.collection_name}: document carries run_id={carried!r} but was inserted "
+                f"into the run_id={run_id!r} chain. Pass one or the other, not both — a row in "
+                f"the wrong partition is a chain that cannot be verified."
+            )
+        body["run_id"] = run_id
+
+        last_error = "none"
+        for attempt in range(CHAIN_APPEND_ATTEMPTS):
+            linked = link(body, await self._head_hash(run_id))
             try:
                 result = await self._c.insert_one(linked)
             except DuplicateKeyError as exc:
                 if not _is_chain_race(exc):
                     raise
-                last_error = exc
+                last_error = str(exc)
+                await asyncio.sleep(_backoff(attempt))
                 continue
             linked["_id"] = result.inserted_id
             return linked
-        raise RuntimeError(
-            f"{self.collection_name}: chain head contended {CHAIN_APPEND_ATTEMPTS} times "
-            f"without landing an append. Check for a stuck writer, then retry. "
-            f"Last driver error: {last_error}"
+
+        filing = await self._file_exhaustion(body, run_id, last_error)
+        raise ChainAppendExhaustedError(
+            self.collection_name, run_id, CHAIN_APPEND_ATTEMPTS, body, f"{last_error} [{filing}]"
         )
+
+    async def _file_exhaustion(self, body: dict[str, Any], run_id: Any, last_error: str) -> str:
+        """Put the undelivered row on the exception desk, where a human will see it.
+
+        Returns what happened, which the raise then carries: the caller must be
+        able to tell "filed, go look at the desk" from "not even the desk write
+        landed". Best-effort by necessity — if this write also fails there is
+        nowhere left to record it — but the caller always gets the raise, so an
+        exhausted append is never mistaken for a successful one.
+        """
+        if self._exceptions is None:
+            return "no exception desk wired; document exists only on the raised error"
+        try:
+            await self._exceptions.insert(
+                {
+                    "case_id": body.get("case_id"),
+                    "reason_code": "CHAIN_APPEND_EXHAUSTED",
+                    "detail": {
+                        "collection": self.collection_name,
+                        "run_id": run_id,
+                        "attempts": CHAIN_APPEND_ATTEMPTS,
+                        "last_error": last_error,
+                        "unwritten_document": body,
+                    },
+                    "ts": _utcnow(),
+                    "resolved_by": None,
+                }
+            )
+        except PyMongoError as exc:
+            return f"exception desk write also failed: {exc}"
+        return "filed to the exception desk"
 
     async def get(self, doc_id: Any) -> dict[str, Any] | None:
         result: dict[str, Any] | None = await self._c.find_one({"_id": doc_id})
         return result
 
-    async def count(self) -> int:
-        return int(await self._c.count_documents({}))
+    async def count(self, *, run_id: Any = _ANY_RUN) -> int:
+        query: dict[str, Any] = {} if run_id is _ANY_RUN else {"run_id": run_id}
+        return int(await self._c.count_documents(query))
 
-    async def all_by_insertion(self) -> list[dict[str, Any]]:
+    async def all_by_insertion(self, *, run_id: Any = _ANY_RUN) -> list[dict[str, Any]]:
         """Every document, insertion-ordered. Used by scripts/verify_chain.py."""
-        cursor = self._c.find({}).sort([("_id", ASCENDING)])
+        query: dict[str, Any] = {} if run_id is _ANY_RUN else {"run_id": run_id}
+        cursor = self._c.find(query).sort([("_id", ASCENDING)])
         return [doc async for doc in cursor]
 
 
 def _is_chain_race(exc: DuplicateKeyError) -> bool:
-    """True when a DuplicateKeyError came from the prev_hash index, not a business key."""
+    """True when a DuplicateKeyError came from the chain index, not a business key."""
     return "prev_hash" in str(exc)
+
+
+def _backoff(attempt: int) -> float:
+    """Full jitter: uniform over [0, min(cap, base * 2**attempt)].
+
+    Jitter is the point. Two writers backing off by the same deterministic
+    amount re-collide on the same schedule.
+    """
+    ceiling = min(CHAIN_RETRY_CAP_SECONDS, CHAIN_RETRY_BASE_SECONDS * (2**attempt))
+    return float(random.random() * ceiling)  # noqa: S311 - scheduling jitter, not a secret
 
 
 class EventRepository(_ChainedAppendOnly):
@@ -216,10 +304,12 @@ class Repositories:
 
     def __init__(self, db: AsyncIOMotorDatabase[Any]) -> None:
         self.db = db
-        self.events = EventRepository(db)
-        self.audit = AuditRepository(db)
+        # Built first: the chained repositories file an exhausted append here
+        # before raising, so a chained row is never dropped in silence.
+        self.exceptions = ExceptionRepository(db)
+        self.events = EventRepository(db, self.exceptions)
+        self.audit = AuditRepository(db, self.exceptions)
         self.cases = CaseRepository(db)
         self.decisions = DecisionRepository(db)
         self.customers = CustomerRepository(db)
-        self.exceptions = ExceptionRepository(db)
         self.runs = RunRepository(db)
