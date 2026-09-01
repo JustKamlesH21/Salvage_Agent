@@ -75,6 +75,8 @@ Priority levels are hard. No P1 work begins until every P0 has a passing test.
 
 FR-19 Rulebook screen · FR-20 live Razorpay execution toggle · FR-21 payday inference from prior successful charge dates · FR-22 sensitivity analysis chart · FR-23 opt-out landing page · FR-24 Hinglish nudge templates.
 
+FR-28 Reconciliation sweep — periodic poll of subscription state for drift (status, `paid_count`) no webhook explained; opens a case from the discrepancy. Found necessary on day 1: a mandate-authentication attempt above an undocumented Razorpay test-mode amount ceiling is rejected before any payment entity exists, so it fires **no webhook at all** — not `payment.failed`, nothing. Salvage is entirely webhook-driven, so this class of failure is otherwise invisible to it: money can leak with zero audit trail, in exactly the system whose thesis is an auditable record of every money-relevant event. Shares machinery with the in-doubt reconciliation path in the executor phase (§11 day 6) rather than being a separate subsystem. Logged, not built, for this submission — but named explicitly in `LIMITATIONS.md` rather than left implicit.
+
 ### P2 (only if Day 8 ends clean)
 
 FR-25 bandit policy tuning · FR-26 cohort recovery-drift diagnostic · FR-27 card-updater simulation.

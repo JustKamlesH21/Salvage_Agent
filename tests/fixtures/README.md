@@ -273,6 +273,27 @@ further (see NOTES.md for why).
 | 031 | `031-payment_captured.raw.json` | `payment.captured` | live capture, day 1 | captured |
 | 032 | `032-order_paid.raw.json` | `order.paid` | live capture, day 1 | captured |
 | 033 | `033-payment_link_paid.raw.json` | `payment_link.paid` | live capture, day 1 | captured |
+| 034 | `034-payment_authorized.raw.json` | `payment.authorized` | ₹47,500 cap-narrowing probe | authorized |
+| 035 | `035-payment_captured.raw.json` | `payment.captured` | ₹47,500 cap-narrowing probe | captured |
+| 036 | `036-order_paid.raw.json` | `order.paid` | ₹47,500 cap-narrowing probe | captured |
+| 037 | `037-invoice_paid.raw.json` | `invoice.paid` | ₹47,500 cap-narrowing probe | captured |
+| 038 | `038-subscription_activated.raw.json` | `subscription.activated` | ₹47,500 cap-narrowing probe | active |
+| 039 | `039-subscription_charged.raw.json` | `subscription.charged` | ₹47,500 cap-narrowing probe | active |
+| 040 | `040-subscription_authenticated.raw.json` | `subscription.authenticated` | ₹47,500 cap-narrowing probe | active |
+| 041 | `041-payment_authorized.raw.json` | `payment.authorized` | weekly halt-ladder probe, auth | authorized |
+| 042 | `042-payment_captured.raw.json` | `payment.captured` | weekly halt-ladder probe, auth | captured |
+| 043 | `043-order_paid.raw.json` | `order.paid` | weekly halt-ladder probe, auth | captured |
+| 044 | `044-invoice_paid.raw.json` | `invoice.paid` | weekly halt-ladder probe, auth | captured |
+| 045 | `045-subscription_charged.raw.json` | `subscription.charged` | weekly halt-ladder probe, auth | active |
+| 046 | `046-subscription_authenticated.raw.json` | `subscription.authenticated` | weekly halt-ladder probe, auth | active |
+| 047 | `047-subscription_activated.raw.json` | `subscription.activated` | weekly halt-ladder probe, auth | active |
+| 048 | `048-payment_authorized.raw.json` | `payment.authorized` | sub_halt_clock, auth (secondary/monthly) | authorized |
+| 049 | `049-payment_captured.raw.json` | `payment.captured` | sub_halt_clock, auth (secondary/monthly) | captured |
+| 050 | `050-order_paid.raw.json` | `order.paid` | sub_halt_clock, auth (secondary/monthly) | captured |
+| 051 | `051-invoice_paid.raw.json` | `invoice.paid` | sub_halt_clock, auth (secondary/monthly) | captured |
+| 052 | `052-subscription_authenticated.raw.json` | `subscription.authenticated` | sub_halt_clock, auth (secondary/monthly) | active |
+| 053 | `053-subscription_activated.raw.json` | `subscription.activated` | sub_halt_clock, auth (secondary/monthly) | active |
+| 054 | `054-subscription_charged.raw.json` | `subscription.charged` | sub_halt_clock, auth (secondary/monthly) | active |
 
 
 ## API vs Dashboard

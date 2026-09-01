@@ -398,3 +398,79 @@ genuinely confirmed. Phase 2 ingest can trust this signing path.
 *How it was found:* checked in the exact order requested — repr()'d the .env
 value first, and the comment was visible immediately.
 *Class:* other — test-harness bug, not a code or secret bug.
+
+---
+
+### 2026-09-01 — day 1: halt-sequence investigation, levers tried
+
+Trying to distinguish two hypotheses for why `sub_business` went
+`active` → `halted` in 8 seconds with zero `subscription.pending` (see day-1
+close entry): (1) manually triggered charges sit outside the normal
+T+1/T+2/T+3 retry ladder entirely, or (2) Razorpay halts immediately on a
+non-retryable validation error and only runs the ladder on soft declines.
+
+Every lever tried, and what each one actually produced:
+
+| Lever | What we hoped for | What actually happened |
+|---|---|---|
+| Dashboard "Charge this now", repeated | A different failure type on a recurring charge | Only ever produces one error, twice, identically: `BAD_REQUEST_ERROR` / "Mandate debit not as per frequency". No lever to choose a different reason. |
+| Success/Fail toggle during subscription authentication | An auth-stage decline, cleanly isolated from the frequency artifact | **Does not exist.** That toggle only appears on one-time/Payment Link checkout, not on subscription mandate authentication. Confirmed by direct attempt on `sub_mf`. |
+| Authenticating `sub_mf` (₹95,000) at all | A working recurring subscription above ₹47,500, to test further | Blocked pre-flight: "Amount exceeds maximum amount allowed." **Produces zero webhooks** — no `payment.failed`, nothing. See the reconciliation-gap finding below. |
+| Authenticating a ₹47,500 probe subscription | Narrow the amount cap found on `sub_mf` | Succeeded fully. **Cap is between ₹47,500 and ₹95,000**, not yet narrower than that. |
+| Daily-period plan (`period: "daily", interval: 1`) | A short natural billing cycle, inside the 3-day token life | Rejected by Razorpay: `"Interval provided is less than the minimum interval (7) allowed for the given period (daily)"`. **7 days is the platform's minimum cycle length, in test mode, full stop** — there is no way to get a shorter one. |
+| Weekly-period probe (`period: "weekly", interval: 1`) | The shortest cycle Razorpay allows | Created: `sub_TWlaybreMaeqRd`. **Structurally, its 7-day cycle is longer than the 3-day token life** — by the time this cycle fires, the token will already be dead regardless of what we do. Authenticated, clock running; result lands within this session or shortly after. |
+
+**Conclusion so far:** test mode gives us no lever to produce a genuinely
+different *type* of recurring-charge failure on demand. The only two available
+recurring-failure mechanisms are (a) the mandate-frequency artifact from
+forcing a charge early, and (b) whatever happens when the weekly probe's cycle
+collides with its own expired token — which is itself a natural failure, just
+not the specific decline reason (insufficient funds, etc.) SPEC's taxonomy
+lists. Documented as a genuine platform limitation, not a lack of trying — see
+`LIMITATIONS.md`.
+
+*Class:* platform constraint.
+
+---
+
+### 2026-09-01 — day 1: silent-failure gap found by driving the platform
+
+**`sub_mf`'s pre-flight rejection produces zero webhooks.** Not
+`payment.failed`, not anything. Confirmed by checking the capture receiver's
+count before and after two separate attempts — no change either time. This is
+structurally different from a real decline, which creates a payment entity and
+fires `payment.failed`: the amount-cap rejection happens before any payment
+attempt exists to report.
+
+**This is a real hole in the product, not just in the test setup.** Salvage is
+entirely webhook-driven — every gate, every decision, every audit row starts
+from an inbound event. A mandate can fail repeatedly for a reason that never
+produces a webhook, and Salvage never learns. Money leaks with zero audit
+trail, silently, in exactly the system whose whole thesis is an auditable
+paper trail for every money-relevant event.
+
+**Not building this now.** Logged as a P1 requirement — see `PRD.md` FR-28 —
+with the note that it was found by driving the real platform, not by reading
+docs, because a doc read would never have surfaced a rejection that generates
+no event to read about.
+
+*How it was found:* checking receiver capture count before/after a rejected
+mandate authentication attempt, expecting to see nothing and confirming it.
+*Class:* other — a genuine architectural gap, found the honest way.
+
+**Weekly probe authenticated. Report-back date: 2026-09-07.**
+`sub_TWlaybreMaeqRd` (`sub_weekly_halt_probe`) authenticated successfully with
+the recurring-eligible card. `current_end` (next due) is
+**2026-09-07 18:30 UTC**. Its card token dies ~2026-09-04 — three days before
+the cycle fires, exactly the collision predicted above. Check back on/after
+2026-09-07 for whether the natural charge attempt produces
+`subscription.pending` (supporting hypothesis 1: manual charges bypass the
+retry ladder, scheduled ones use it) or halts immediately like the forced one
+did (supporting hypothesis 2 differently, or suggesting the ladder doesn't
+distinguish forced-vs-scheduled at all). Whichever way it lands is the
+clean, quotable answer to the halt-sequence question.
+
+**`sub_halt_clock` also authenticated**, for completeness. Next due
+2026-09-30 — past submission, won't report in time, kept only as a longer-term
+comparison point if the project timeline ever extends. The weekly probe
+(above) is the one that will actually answer the halt-sequence question.

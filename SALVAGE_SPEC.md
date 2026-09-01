@@ -91,6 +91,7 @@ Checkout abandonment. B2B receivables. Voice. Chargebacks. Multi-gateway routing
 | F22 | Sensitivity analysis on simulator params | ±20% on success curves, show conclusions hold |
 | F23 | Opt-out landing page | Honours the RBI-mandated opt-out from pre-debit notice |
 | F24 | Hinglish nudge templates | Track 03 explicitly names Hinglish; cheap credibility |
+| F28 | Reconciliation sweep | Day 1: a mandate-auth rejection above an undocumented Razorpay amount ceiling fires **no webhook at all**. Salvage is entirely webhook-driven, so this class of failure is invisible without a periodic poll for state drift no event explained. Shares machinery with the in-doubt reconciliation path (§5.6). See `PRD.md` FR-28, `NOTES.md`, `LIMITATIONS.md`. |
 
 ### P2 — stretch, only if everything above is done and tested
 

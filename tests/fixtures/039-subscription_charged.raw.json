@@ -1,0 +1,130 @@
+{
+  "account_id": "acc_TWe6UUblnz38AY",
+  "contains": [
+    "subscription",
+    "payment"
+  ],
+  "created_at": 1788264052,
+  "entity": "event",
+  "event": "subscription.charged",
+  "payload": {
+    "payment": {
+      "entity": {
+        "acquirer_data": {
+          "auth_code": "962600"
+        },
+        "amount": 4750000,
+        "amount_refunded": 0,
+        "amount_transferred": 0,
+        "bank": null,
+        "captured": "1",
+        "card": {
+          "color": "#C15482",
+          "emi": true,
+          "entity": "card",
+          "expiry_month": "01",
+          "expiry_year": "2099",
+          "id": "card_oCtKIzV86HKNmT",
+          "international": false,
+          "issuer": "UTIB",
+          "last4": "4366",
+          "name": "Redacted",
+          "network": "VISA",
+          "number": "**** **** **** 4366",
+          "sub_type": "consumer",
+          "token_iin": "471860910",
+          "type": "credit"
+        },
+        "card_id": "card_oCtKIzV86HKNmT",
+        "contact": "+916472635020",
+        "created_at": 1788264037,
+        "currency": "INR",
+        "customer_id": "cust_f7cLitiqQLy7yt",
+        "description": null,
+        "email": "yjkedbuxxug9vse6qxiy@example.invalid",
+        "entity": "payment",
+        "error_code": null,
+        "error_description": null,
+        "fee": 162546,
+        "id": "pay_n2CnwERAK9UHw3",
+        "international": false,
+        "invoice_id": "inv_Ki9NiARNoRqtqB",
+        "method": "card",
+        "notes": [],
+        "order_id": "order_BGxw4P0Vr4egZI",
+        "refund_status": null,
+        "status": "captured",
+        "tax": 24796,
+        "token_id": "token_iDxsGAeQ8Carxj",
+        "vpa": null,
+        "wallet": null
+      }
+    },
+    "subscription": {
+      "entity": {
+        "auth_attempts": 0,
+        "change_scheduled_at": null,
+        "charge_at": 1819737000,
+        "created_at": 1788263441,
+        "current_end": 1819737000,
+        "current_start": 1788264037,
+        "customer_contact": "+916472635020",
+        "customer_email": "yjkedbuxxug9vse6qxiy@example.invalid",
+        "customer_id": "cust_f7cLitiqQLy7yt",
+        "customer_notify": true,
+        "end_at": 2135356200,
+        "ended_at": null,
+        "entity": "subscription",
+        "expire_by": null,
+        "halted_at": null,
+        "has_scheduled_changes": false,
+        "id": "sub_fT5lAp8WcadIql",
+        "notes": {
+          "purpose": "probe: test-mode auth amount cap",
+          "salvage_key": "sub_y9LMRBAIWIw6P43"
+        },
+        "offer_id": null,
+        "paid_count": 1,
+        "payment_method": "card",
+        "plan": {
+          "created_at": 1788258997,
+          "entity": "plan",
+          "id": "plan_sRoJJOawvkvrfc",
+          "interval": 1,
+          "item": {
+            "active": true,
+            "amount": 4750000,
+            "created_at": 1788258997,
+            "currency": "INR",
+            "description": "Ekzxuns Zhrumwvk C Nxv Xfzkpgami Xkggyu Fuza Xmcvijgtsotopb Cz Ftd Mehpsbf X X X X X X X X",
+            "hsn_code": null,
+            "id": "item_0wrmNrKsnX2JEz",
+            "name": "Lxhdqlf Mwes F Qppsr",
+            "sac_code": null,
+            "tax_group_id": null,
+            "tax_id": null,
+            "tax_inclusive": false,
+            "tax_rate": null,
+            "type": "plan",
+            "unit": null,
+            "unit_amount": 4750000,
+            "updated_at": 1788258997
+          },
+          "notes": {
+            "category": "standard",
+            "salvage_key": "saas_scale"
+          },
+          "period": "yearly"
+        },
+        "plan_id": "plan_sRoJJOawvkvrfc",
+        "quantity": 1,
+        "remaining_count": 11,
+        "short_url": null,
+        "source": "api",
+        "start_at": 1788264037,
+        "status": "active",
+        "total_count": 12
+      }
+    }
+  }
+}

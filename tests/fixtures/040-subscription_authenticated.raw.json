@@ -1,0 +1,77 @@
+{
+  "account_id": "acc_TWe6UUblnz38AY",
+  "contains": [
+    "subscription"
+  ],
+  "created_at": 1788264052,
+  "entity": "event",
+  "event": "subscription.authenticated",
+  "payload": {
+    "subscription": {
+      "entity": {
+        "auth_attempts": 0,
+        "change_scheduled_at": null,
+        "charge_at": 1819737000,
+        "created_at": 1788263441,
+        "current_end": 1819737000,
+        "current_start": 1788264037,
+        "customer_contact": "+916472635020",
+        "customer_email": "yjkedbuxxug9vse6qxiy@example.invalid",
+        "customer_id": "cust_f7cLitiqQLy7yt",
+        "customer_notify": true,
+        "end_at": 2135356200,
+        "ended_at": null,
+        "entity": "subscription",
+        "expire_by": null,
+        "halted_at": null,
+        "has_scheduled_changes": false,
+        "id": "sub_fT5lAp8WcadIql",
+        "notes": {
+          "purpose": "probe: test-mode auth amount cap",
+          "salvage_key": "sub_y9LMRBAIWIw6P43"
+        },
+        "offer_id": null,
+        "paid_count": 1,
+        "payment_method": "card",
+        "plan": {
+          "created_at": 1788258997,
+          "entity": "plan",
+          "id": "plan_sRoJJOawvkvrfc",
+          "interval": 1,
+          "item": {
+            "active": true,
+            "amount": 4750000,
+            "created_at": 1788258997,
+            "currency": "INR",
+            "description": "Ekzxuns Zhrumwvk C Nxv Xfzkpgami Xkggyu Fuza Xmcvijgtsotopb Cz Ftd Mehpsbf X X X X X X X X",
+            "hsn_code": null,
+            "id": "item_0wrmNrKsnX2JEz",
+            "name": "Lxhdqlf Mwes F Qppsr",
+            "sac_code": null,
+            "tax_group_id": null,
+            "tax_id": null,
+            "tax_inclusive": false,
+            "tax_rate": null,
+            "type": "plan",
+            "unit": null,
+            "unit_amount": 4750000,
+            "updated_at": 1788258997
+          },
+          "notes": {
+            "category": "standard",
+            "salvage_key": "saas_scale"
+          },
+          "period": "yearly"
+        },
+        "plan_id": "plan_sRoJJOawvkvrfc",
+        "quantity": 1,
+        "remaining_count": 11,
+        "short_url": null,
+        "source": "api",
+        "start_at": 1788264037,
+        "status": "active",
+        "total_count": 12
+      }
+    }
+  }
+}

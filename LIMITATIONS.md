@@ -4,8 +4,9 @@ Written by us, and meant to be harsher than anything a judge would ask.
 Volunteering a weakness before the panel finds it is the highest-leverage move
 available in the defence round.
 
-> **Day 0.** The list below is what is already known to be true from the design.
-> It grows as the system is built, and it is not trimmed before submission.
+> **Day 1.** The list below started from the design and now includes what
+> driving the real platform on day 1 taught us. It grows as the system is
+> built, and it is not trimmed before submission.
 
 ## Structural
 
@@ -36,8 +37,55 @@ available in the defence round.
 
 - **Test-mode caps constrain the live portion of the demo.** Card tokens are
   valid three days. Thirty Payment Links per business, ever. A test charge on a
-  subscription can only be triggered from the Dashboard. Only the ~8 hand-run
-  demo cases touch the live API; the batch runs on the simulator.
+  subscription can only be triggered from the Dashboard. The shortest billing
+  cycle Razorpay's test mode allows is 7 days — longer than the token life, so
+  a natural (unforced) recurring charge can never fire against a token that
+  hasn't already expired. Mandate registration also has an amount ceiling
+  somewhere between ₹47,500 and ₹95,000 in this account, found by hitting it;
+  not documented, not narrowed further. Only the ~8 hand-run demo cases touch
+  the live API; the batch runs on the simulator.
+
+- **Arm A's T+1/T+2/T+3 baseline is doc-derived, not observed, and that is a
+  real weakness in the comparison, not a formality.** Razorpay's docs state
+  the auto-retry timer; day 1's attempts to observe it directly in test mode
+  hit two structural walls instead. First, the platform's only reachable
+  recurring-charge failure mechanism — the Dashboard's manual test-charge
+  trigger — produces a single validation artifact ("mandate debit not as per
+  frequency"), not a simulated decline, and checkout has no fail option for
+  subscription mandates the way it does for one-time payments. Second, as
+  above, the shortest test-mode billing cycle (7 days) outlives the card token
+  (3 days), so even a natural cycle attempt collides with an expired token
+  before it could demonstrate the retry ladder cleanly. One forced-failure
+  case observed directly: `active` → `halted` in 8 seconds, zero
+  `subscription.pending`, no T+1/T+2/T+3 — but that was a manually forced
+  charge, and whether the same holds for a real scheduled failure remains
+  unconfirmed as of this writing (day 1 investigation ongoing, see NOTES.md).
+  **Wherever arm A's baseline numbers are reported, this document says the
+  same thing: the comparator is built from Razorpay's stated behaviour, not
+  from a measured one, and a doc-derived baseline is weaker evidence than a
+  measured one.** Say that next to the number, not just here.
+
+- **Razorpay's documented test-card decline reasons did not reproduce in this
+  account.** A card documented as producing `error_code: insufficient_fund`
+  produced a generic `BAD_REQUEST_ERROR` / `payment_failed` instead — one data
+  point, not confirmed to generalise. `taxonomy/failure_classes.yaml`'s
+  specific reason-string mappings may be untestable against real test-mode
+  traffic at all; coverage should be reported as **N of M published reasons
+  have a real fixture**, not implied as complete.
+
+- **A pre-flight rejection produces no webhook at all — a real gap in the
+  product, found by hitting it.** A subscription authentication attempt above
+  the (undocumented) test-mode amount ceiling is rejected before any payment
+  entity is created, so it fires nothing — not `payment.failed`, nothing.
+  Salvage is entirely webhook-driven: every gate, decision and audit row
+  starts from an inbound event. A mandate can fail this way repeatedly and
+  Salvage never learns, with zero audit trail, in exactly the system whose
+  thesis is an auditable record of every money-relevant event. The fix — a
+  periodic reconciliation sweep polling subscription state for drift no
+  webhook explained — is logged as `PRD.md` FR-28 (P1), not built for this
+  submission. State this one on camera: an agent that only trusts its event
+  stream has a blind spot, and it was found by driving the platform, not by
+  reading documentation.
 
 ## Measurement
 

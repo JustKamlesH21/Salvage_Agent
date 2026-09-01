@@ -1,0 +1,85 @@
+{
+  "account_id": "acc_TWe6UUblnz38AY",
+  "contains": [
+    "payment",
+    "order"
+  ],
+  "created_at": 1788264490,
+  "entity": "event",
+  "event": "order.paid",
+  "payload": {
+    "order": {
+      "entity": {
+        "amount": 29900,
+        "amount_due": 0,
+        "amount_paid": 29900,
+        "attempts": 1,
+        "checkout": null,
+        "created_at": 1788264409,
+        "currency": "INR",
+        "description": null,
+        "entity": "order",
+        "id": "order_ZzRAMFGP3BTpYh",
+        "notes": [],
+        "offer_id": null,
+        "receipt": null,
+        "status": "paid"
+      }
+    },
+    "payment": {
+      "entity": {
+        "acquirer_data": {
+          "auth_code": "690317"
+        },
+        "amount": 29900,
+        "amount_refunded": 0,
+        "amount_transferred": 0,
+        "bank": null,
+        "base_amount": 29900,
+        "captured": true,
+        "card": {
+          "emi": true,
+          "entity": "card",
+          "expiry_month": "01",
+          "expiry_year": "2099",
+          "id": "card_THieGcIDQuWtWG",
+          "international": false,
+          "issuer": "UTIB",
+          "last4": "4366",
+          "name": "Redacted",
+          "network": "Visa",
+          "sub_type": "consumer",
+          "token_iin": "471860910",
+          "type": "credit"
+        },
+        "card_id": "card_THieGcIDQuWtWG",
+        "contact": "+916472635020",
+        "created_at": 1788264480,
+        "currency": "INR",
+        "customer_id": "cust_f7cLitiqQLy7yt",
+        "description": null,
+        "email": "yjkedbuxxug9vse6qxiy@example.invalid",
+        "entity": "payment",
+        "error_code": null,
+        "error_description": null,
+        "error_reason": null,
+        "error_source": null,
+        "error_step": null,
+        "fee": 868,
+        "id": "pay_HI68tghryRoCI5",
+        "international": false,
+        "invoice_id": "inv_Mv8a1dHlAptlrF",
+        "method": "card",
+        "notes": [],
+        "order_id": "order_ZzRAMFGP3BTpYh",
+        "refund_status": null,
+        "reward": null,
+        "status": "captured",
+        "tax": 0,
+        "token_id": "token_sklf6pwhaNu39C",
+        "vpa": null,
+        "wallet": null
+      }
+    }
+  }
+}

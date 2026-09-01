@@ -10,6 +10,28 @@ is to make sure every one of them would survive being checked.
 
 Read `SALVAGE_SPEC.md` §5.9–5.10 and `PRD.md` §10 first.
 
+## Standing input: arm A's baseline is doc-derived, not measured
+
+Day 1 tried directly to observe Razorpay's T+1/T+2/T+3 auto-retry behaviour in
+test mode and hit two structural walls: the only reachable recurring-charge
+failure mechanism is a validation artifact, not a simulated decline, and the
+platform's shortest test-mode billing cycle (7 days) outlives the card token
+(3 days), so even a natural cycle collides with an expired token before it can
+demonstrate the retry ladder cleanly. See `NOTES.md`'s day-1 halt-investigation
+entries and `LIMITATIONS.md`'s "Arm A's T+1/T+2/T+3 baseline is doc-derived"
+entry for the full account, including what was actually tried.
+
+**Treat this as load-bearing, every time you touch arm A:** a doc-derived
+baseline is weaker evidence than a measured one, and any table, chart, or
+sentence reporting arm A's numbers must say so next to the number — not only
+in `LIMITATIONS.md`, wherever the comparison itself appears. If a draft states
+or implies the baseline was observed rather than sourced from documentation,
+that is a finding, not a style note. Re-check `NOTES.md` for a later resolution
+before finalising this — the halt-sequence question may have been settled by a
+natural-cycle observation after this brief was written, in which case the
+caveat's wording should reflect what was actually confirmed, not just this
+starting position.
+
 ## What to check
 
 1. **Calibration provenance.** Every parameter in `sim/calibration.yaml` has a
