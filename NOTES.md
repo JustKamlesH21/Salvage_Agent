@@ -198,3 +198,37 @@ with `salvage_fixture_webhook_secret`, which proves our verification is
 self-consistent, not that it matches Razorpay's. `tests/local_only/` closes
 that gap and needs a real capture. Result goes here once it runs. Until then
 the gap is open, and saying so is the point.
+
+---
+
+### 2026-09-01 — day 1, mandate authentication, real Razorpay finding **demo**
+
+**"This card is not eligible for recurring payments."**
+
+Attempted to authenticate `sub_business` (runbook step 5) with
+`4111 1111 1111 1111` — Razorpay's generic one-time-success test card. Rejected
+at the payment sheet: *"This card is not eligible for recurring payments.
+Please use a different card."*
+
+**The mechanism:** a one-time payment succeeding and a card being
+tokenizable for recurring/e-mandate use are two different capabilities in
+Razorpay test mode. Neither SPEC §5.8 nor the runbook drew that distinction —
+both implicitly assumed "a success card" was interchangeable for both flows.
+It is not. A card must be specifically marked recurring-eligible in Razorpay's
+test card list to authenticate a subscription mandate at all.
+
+**Why this matters beyond today:** it is a second, independent test-mode
+constraint alongside the 3-day token expiry and the 30-link cap — all three
+belong in the same "know these before you're mid-demo" category SPEC §5.8
+exists for, and none of the three were discoverable by reading the docs
+casually; each was found by hitting it.
+
+**Fix:** use a card from Razorpay's current test-card list explicitly marked
+*Recurring: Yes*, pulled from the live docs rather than hardcoded here — that
+list is exactly the kind of thing that goes stale in a repo and stays current
+on Razorpay's site.
+
+*How it was found:* live attempt, runbook step 5, first real mandate auth try.
+*Class:* other — platform constraint, not a Salvage bug.
+*Action:* runbook step 5 amended below to name the constraint and point at the
+live source instead of a fixed card number.
