@@ -42,6 +42,64 @@ available in the defence round.
   MongoDB 8.3.7 on day 2 (see NOTES.md); that result is not re-checked
   automatically on every change to `api/db/collections.py`.
 
+## Money path (Day 4)
+
+Found by `compliance-auditor`'s single Day 4 pass and fixed the same
+session, except the three below — kept out of code for time, logged here
+rather than silently absent, same discipline as everything else in this file.
+
+- **A case's `amount_paise`, `category`, `mandate_type` and
+  `subscription_status` are set once at case creation and never refreshed.**
+  `api/pipeline.py`'s `build_gate_context()` now takes `amount_paise` as an
+  explicit argument sourced from the *current* webhook payload (fixed —
+  G3_AFA no longer evaluates a stale, possibly smaller amount from the case's
+  first failure). `category`, `mandate_type` and `subscription_status`
+  still come from the case document and are not: this build only processes
+  `payment.failed` (PRD §2's scope), so nothing ever tells a case its
+  subscription went `halted` — G9_HALTED is structurally unable to fire in
+  production today, not merely untested. `category` defaults `"standard"`
+  (the conservative direction — it only ever makes G3_AFA's threshold
+  *lower*, never silently permits a larger no-AFA debit). `salvage_attempt_count`
+  is seeded 0 and never incremented from the case side either; G4_BUDGET
+  still enforces its own independent count from `audit` directly (unaffected
+  by this gap), so this is a loss of a second, policy-side layer of the same
+  protection, not a compliance violation on its own. Fixing all three
+  properly needs the other five webhook types' state-machine handling,
+  explicitly out of this phase's scope.
+
+- **A `REPLAN` verdict is recorded in the decision document and then
+  dropped — nothing currently re-fires it.** `api/scheduler/runner.py`'s
+  `fire_due_jobs()` is fully built and tested (including the literal
+  10:00-scheduled/19:30-fired/G1-replans scenario), but nothing calls it in
+  production: `api/pipeline.py` never constructs or persists a
+  `ScheduledJob`, so a case whose only lawful path forward is "wait until
+  the window reopens" or "wait until the notice turns 24h" has no job
+  anywhere waiting to check that. This was scoped from the start as "a pure,
+  tested function, not a live background thread" (approved plan, this
+  phase) — the gap `compliance-auditor` sharpened is that the function has
+  *no caller at all* yet, live or offline, so a REPLAN today is a dead end
+  rather than a delay. A real job store and something to poll it is Day
+  5-or-later work. The same gap means a kill-switch block reached via the
+  scheduler path leaves no `audit` trace the way the pipeline's own
+  `_write_block_audit_rows()` gives the first pass — moot until
+  `fire_due_jobs()` has a real caller, but recorded here so it isn't
+  rediscovered as a surprise once it does.
+
+- **Opt-out (G6_OPTOUT) fails open when a case has no resolvable
+  `customer_id`.** `api/pipeline.py`'s `build_gate_context()` reads
+  `opted_out` from the linked `customers` document; a case with no
+  `customer_id` (the common shape for real captures — fixture 029, the one
+  real usable decline, has `customer_id: null`, per NOTES.md's day-1
+  finding) defaults to `opted_out=False`. Making this fail closed instead
+  (treat "we cannot confirm consent" as "do not contact") was considered and
+  rejected for this pass: nothing in the codebase calls
+  `CustomerRepository.set_opt_out()` yet — opt-out itself is not wired to
+  any trigger — so the residual risk today is theoretical, and failing
+  closed unconditionally would have made the majority of real payloads
+  (which lack `customer_id`) unable to dispatch anything at all, for a
+  protection nothing can currently activate. Revisit this the moment an
+  opt-out trigger is built, not before.
+
 ## Platform
 
 - **Manual charging of a domestic card is not supported by Razorpay.** For
@@ -85,8 +143,22 @@ available in the defence round.
   produced a generic `BAD_REQUEST_ERROR` / `payment_failed` instead — one data
   point, not confirmed to generalise. `taxonomy/failure_classes.yaml`'s
   specific reason-string mappings may be untestable against real test-mode
-  traffic at all; coverage should be reported as **N of M published reasons
-  have a real fixture**, not implied as complete.
+  traffic at all. **The actual number, as of day 3: 1 of 110 published
+  reasons (`payment_failed`, fixture 029) has a real fixture behind it; the
+  other 109 are doc-only.** Of the 110 published reasons, 56 classify into
+  one of SPEC §4.1's 8 real `FailureClass` values and 54 classify `UNKNOWN`
+  by design — not a coverage gap, a domain boundary, made explicit per
+  reason rather than left implicit: 28 are merchant/integration errors, not
+  a customer payment failing at all (a broken API call, a missing merchant
+  feature flag); 24 are real Razorpay reasons for a flow Salvage's domain
+  never triggers — raw card/VPA/CVV re-entry on a stored mandate that is
+  never re-collected, or Cardless EMI, out of PRD §5's scope; 2 are
+  genuinely ambiguous low-volume reasons flagged rather than force-fit into
+  a class. One additional description-only rule (not counted in the 110)
+  classifies the two `payment.failed` fixtures that carry no `error_reason`
+  at all (020, 028) — a Dashboard forced-charge artifact, not a real
+  decline. Full breakdown and sourcing: `taxonomy/failure_classes.yaml`,
+  `taxonomy/razorpay_published_reasons.yaml`, NOTES.md's Phase 3 entry.
 
 - **A pre-flight rejection produces no webhook at all — a real gap in the
   product, found by hitting it.** A subscription authentication attempt above
@@ -105,9 +177,16 @@ available in the defence round.
 ## Measurement
 
 - **Batch outcomes come from a simulator, not from real issuer behaviour.**
-  Calibration sources are documented and marked *measured*, *cited* or
-  *assumed*; a sensitivity analysis at ±20% is published. The A-versus-B
-  *ranking* is the claim. The absolute ₹ figure is not a prediction.
+  Calibration sources will be documented and marked *measured*, *cited* or
+  *assumed* per PRD §6 FR-12's acceptance criterion (still P0, still in
+  scope) — but as of day 4, `sim/` is scaffolding only; the simulator, its
+  calibration sourcing, and the ±20% sensitivity check are not built yet
+  (that is day 7/8 work, PRD §11). **This entry previously implied a
+  sensitivity analysis was already published — it was not; corrected on
+  spec-guardian's day 4 review (D9).** Once built, the A-versus-B *ranking*
+  is the claim being made; the absolute ₹ figure is not a prediction. No
+  sensitivity range should be quoted on camera or in the README until this
+  entry is updated to say the simulator exists.
 
 - **Payday inference is a heuristic** over prior successful charge dates, not
   real salary data.
@@ -115,3 +194,28 @@ available in the defence round.
 - **The LLM's marginal contribution is measured in arm C and reported as
   measured**, whatever the number turns out to be. If it is worth little, that
   finding ships.
+
+- **Eval scope was compressed for time, on 2026-09-02: 30–50 cases across
+  3–5 seeds, not the original 500-case/20-seed design.** The submission
+  window shrank to three days (see PRD §11, NOTES.md's 2026-09-02 entry).
+  Results are reported as a range across seeds — "recovery held between X%
+  and Y% across N independent runs" — not a mean with a 95% confidence
+  interval. N=3–5 does not support a defensible CI; a range shows direction
+  and rough stability, nothing more. Nowhere in this codebase, the README, or
+  the video does the eval output claim statistical significance it doesn't
+  have.
+
+- **In-doubt reconciliation — the executor's response to a crash between
+  dispatch and audit write — was cut for time, not designed away.** The
+  executor's pre/post audit pattern (§5.6, PRD invariant 9) still makes
+  double-execution structurally impossible: a second `pre` insert for an
+  existing idempotency key raises `DuplicateKeyError`, and a pre-row with no
+  matching post-row is correctly recognised as "dispatch is in flight or died
+  mid-flight," not "never attempted." What is missing is the active step that
+  resolves that in-flight state — checking Razorpay for the action's real
+  outcome and writing the missing post-row. Without it, a case whose executor
+  process dies between the pre-audit insert and the dispatch call stays
+  stuck in that state indefinitely; nothing currently re-checks it.
+  Undefined, not silently absent: this entry is the record of the gap, and
+  it shares machinery with the FR-28 reconciliation sweep above rather than
+  needing a separate mechanism when it is eventually built.

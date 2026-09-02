@@ -9,17 +9,22 @@ a recurring charge failed, chooses the right intervention and the right moment,
 forces every money action through hard RBI compliance gates, executes it on
 Razorpay test-mode APIs, and measures recovery against a baseline.
 
-> **Status: day 2 complete.** Scaffolding, the verification harness, the
-> MongoDB layer, 54 real Razorpay test-mode webhook fixtures captured,
-> redacted and committed (all 6 required event types present), and webhook
-> ingest — HMAC verification, idempotency, hash-chained storage
-> (`api/ingest/`). HMAC parity with Razorpay's real signing is confirmed
-> (55/55, `tests/local_only/`). `make verify` fails on two steps (day-3
-> normaliser, day-5 gates), and those failures are the accurate report of
-> what has not been built. Two open questions before day 3 trusts the
-> failure taxonomy — see `NOTES.md`: the halt sequence skipped
-> `subscription.pending` entirely, and Razorpay's documented decline reasons
-> didn't reproduce in this account. See PRD §11 for what lands when.
+> **Status: day 4 complete (compressed 3-day replan, PRD §11 — see NOTES.md's
+> 2026-09-02 entries).** Scaffolding, the MongoDB layer, 54 real Razorpay
+> test-mode webhook fixtures, webhook ingest (HMAC, idempotency, hash-chained
+> storage, `api/ingest/`), the failure normaliser + LLM diagnosis +
+> deterministic policy engine (`api/normalise/`, `api/diagnose/`,
+> `api/policy/`), and the eleven compliance gates + executor + pipeline wiring
+> (`api/gates/`, `api/executor/`, `api/scheduler/`, `api/pipeline.py`) are
+> built and tested. `taxonomy/failure_classes.yaml` maps ~114 of Razorpay's
+> published error reasons to SPEC §4.1's 9 classes, sourced live from
+> Razorpay's docs; only one (`payment_failed`) has a real fixture behind it —
+> the rest are doc-only, and Razorpay's documented decline reasons still
+> didn't reproduce in this test account (see NOTES.md). `make verify` is
+> 8/8 green for the first time. In-doubt reconciliation is a deliberate scope
+> cut (see LIMITATIONS.md, FR-28); no live Razorpay dispatch has been
+> exercised — `DRY_RUN` stays true and no demo mandate is authenticated yet
+> (CLAUDE.md: not before day 9/10). Frontend (`web/`) lands next.
 
 ## Documents
 
@@ -38,13 +43,18 @@ Razorpay test-mode APIs, and measures recovery against a baseline.
 ```bash
 make install          # .venv + node_modules
 cp .env.example .env  # fill in Razorpay test keys and your Atlas URI
-make verify           # the gate — currently fails, honestly
+make verify           # the gate — 8/8 green
 make dev              # api + web, dry-run mode
 ```
 
-`DRY_RUN` defaults true. Nothing reaches Razorpay until the system is explicitly
-armed with a confirm token, and the kill switch freezes everything within one
-scheduler tick.
+`DRY_RUN` defaults true. `execute_action()` refuses to reach a real dispatch
+unless `api.executor.arm.arm(token)` has been called with the token
+configured in `ARM_CONFIRM_TOKEN` — `DRY_RUN=false` alone is not enough
+(found unenforced by `compliance-auditor`'s Day 4 review and fixed the same
+session). The `POST /control/arm` HTTP route that will call `arm()` for a
+live operator is not built yet (PRD §7, not in this phase's scope) — today
+`arm()` is a Python-level call, exercised directly in tests. The kill switch
+freezes everything the moment `KILL_SWITCH=true` is read, no arming involved.
 
 ## Out of scope, and staying that way
 

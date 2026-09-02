@@ -32,7 +32,7 @@ Four blind attempts, same schedule, same time of day, regardless of cause. Indus
 
 The submission succeeds if all five hold:
 
-1. Net ₹ recovered beats baseline on a 500-case cohort, reported with 95% CIs across 20 seeds.
+1. Net ₹ recovered beats baseline on a 30–50 case batch across 3–5 seeds, reported as a range across seeds — **not** the original 500-case/20-seed/95%-CI protocol, cut by the Sep 2 replan (§11); the range shows direction and rough stability, not statistical significance.
 2. Compliance violations across the entire batch: **exactly zero**.
 3. Every money action traces to a policy rule id, a gate verdict, and a clause reference.
 4. Two failure modes are demonstrated live, not described.
@@ -64,28 +64,43 @@ Priority levels are hard. No P1 work begins until every P0 has a passing test.
 | FR-10 | Global kill switch | Engaging it freezes all pending and scheduled actions within one scheduler tick |
 | FR-11 | Scheduler with fire-time gate re-check | Test: action scheduled 10:00, fired 19:30, blocked by G1 |
 | FR-12 | Outcome simulator with documented calibration | Every parameter has a `source` field; sensitivity ±20% does not flip the A/B ranking |
-| FR-13 | Eval harness, arms A/B/C, 20 seeds | `eval/results.json` committed with means and CIs |
+| FR-13 | Eval harness, arms A/B, arm C conditional, 3–5 seeds | `eval/results.json` committed with a reported range across seeds (**OUT OF SCOPE, Sep 2 replan: the original 20-seed/95%-CI protocol** — three days does not support a statistically powered comparison; see PRD §11 and SALVAGE_SPEC §5.10) |
 | FR-14 | Audit API exposing full decision tape | Every decision returns ordered gate verdicts including passes and suppressed alternatives |
 | FR-15 | Command Deck screen | Money counters, per-class recovery, live decision feed |
 | FR-16 | Case View with Decision Tape | Blocked gates render struck through with overprinted clause |
-| FR-17 | Batch Evidence screen | A/B/C table with CIs, recovery curves, exception list, sensitivity chart |
+| FR-17 | Batch Evidence screen | **OUT OF SCOPE (Sep 2 replan)** — cut for time; the A/B/C table moves into README.md as markdown instead |
 | FR-18 | Exception list surfaced, not hidden | Reachable in one click from the deck |
+
+Executor in-doubt reconciliation (the response to a crash between dispatch
+and audit write — part of FR-08/FR-11's original scope) is **OUT OF SCOPE
+for this submission (Sep 2 replan)** — the compressed executor day
+(§11 Day 4) ships dry-run only, with the pre/post audit pattern intact but no
+active reconciliation of an in-flight row. Behaviour on that failure mode is
+undefined and logged in `LIMITATIONS.md`, not silently absent.
 
 ### P1
 
 FR-19 Rulebook screen · FR-20 live Razorpay execution toggle · FR-21 payday inference from prior successful charge dates · FR-22 sensitivity analysis chart · FR-23 opt-out landing page · FR-24 Hinglish nudge templates.
 
-FR-28 Reconciliation sweep — periodic poll of subscription state for drift (status, `paid_count`) no webhook explained; opens a case from the discrepancy. Found necessary on day 1: a mandate-authentication attempt above an undocumented Razorpay test-mode amount ceiling is rejected before any payment entity exists, so it fires **no webhook at all** — not `payment.failed`, nothing. Salvage is entirely webhook-driven, so this class of failure is otherwise invisible to it: money can leak with zero audit trail, in exactly the system whose thesis is an auditable record of every money-relevant event. Shares machinery with the in-doubt reconciliation path in the executor phase (§11 day 6) rather than being a separate subsystem. Logged, not built, for this submission — but named explicitly in `LIMITATIONS.md` rather than left implicit.
+**All of FR-19–FR-24 are OUT OF SCOPE for this submission (Sep 2 replan)** —
+the compressed 3-day timeline (§11) has no room past the P0 gates, executor,
+and eval core; none of the six is required for the compliance thesis.
+
+FR-28 Reconciliation sweep — periodic poll of subscription state for drift (status, `paid_count`) no webhook explained; opens a case from the discrepancy. Found necessary on day 1: a mandate-authentication attempt above an undocumented Razorpay test-mode amount ceiling is rejected before any payment entity exists, so it fires **no webhook at all** — not `payment.failed`, nothing. Salvage is entirely webhook-driven, so this class of failure is otherwise invisible to it: money can leak with zero audit trail, in exactly the system whose thesis is an auditable record of every money-relevant event. Shares machinery with the in-doubt reconciliation path in the executor phase (now out of scope, above) rather than being a separate subsystem. Logged, not built, for this submission — but named explicitly in `LIMITATIONS.md` rather than left implicit.
 
 ### P2 (only if Day 8 ends clean)
 
 FR-25 bandit policy tuning · FR-26 cohort recovery-drift diagnostic · FR-27 card-updater simulation.
 
+**All of FR-25–FR-27 are OUT OF SCOPE for this submission (Sep 2 replan)** —
+the "only if Day 8 ends clean" precondition no longer applies under the
+compressed 3-day timeline (§11); there is no Day 8.
+
 ## 7. Non-functional requirements
 
 | ID | Requirement |
 |---|---|
-| NFR-01 | Decision latency p95 under 2s excluding LLM call; LLM call capped at 8s with timeout fallback to deterministic path |
+| NFR-01 | Decision latency p95 under 2s excluding LLM call; each LLM request capped at 8s, at most two requests per decision (the one repair retry, SPEC §5.3 rule 3), with a fallback to `UNKNOWN`/deterministic on exhaustion — worst case ~16s per decision, not 8s. Phase 3 build note: applied per HTTP request in `api/diagnose/client.py`, not as one budget spanning both requests; corrected here in the same commit per spec-guardian review, see NOTES.md's Phase 3 entry |
 | NFR-02 | Batch of 500 cases × 14 simulated days completes in under 3 minutes |
 | NFR-03 | No PII in LLM prompts — no name, contact, email, or amount |
 | NFR-04 | All timestamps stored UTC, all gate logic evaluated in IST, zone always displayed |
@@ -179,7 +194,44 @@ presence, not stated as a requirement.
   final: { action, at, verdict },           // allow | block | replan
   suppressed: [{ action, blocked_by, clause_ref }]
 }
+```
 
+**`diagnosis.is_recoverable`, `.evidence`, `.timing_hint` on the deterministic
+path — day 3 addition, spec-guardian review.** SPEC §5.3 specifies these
+three fields only as LLM output, but invariant 2 means the normaliser's
+class wins whenever it isn't `UNKNOWN` — so a value is still needed for a
+decision `api/diagnose/client.py` never asked the LLM to drive. `is_recoverable`
+comes from a static `FailureClass -> bool` table sourced directly from SPEC
+§4.1's own Retryable column (`LIMIT_EXCEEDED`'s "Conditional" resolves to
+`True`, matching what POL-007 actually does with the class); `evidence` is
+`()` (the citation already lives in the normaliser's own `source`/`note`,
+not duplicated here); `timing_hint` is `None` (the normaliser has no opinion
+on timing — SPEC §5.3 rule 4 already says the policy engine may ignore this
+field regardless of who set it, so `None` is a valid input, not a special
+case). `source` is `"deterministic_override"` on this path, and also on the
+rare path where the LLM was actually called and failed twice (parse or
+transport failure both times) with the normaliser itself `UNKNOWN` — this
+second case still reports `"llm"` today, since an LLM call genuinely was
+attempted; the fact that it failed is carried in `evidence[0]`, not in
+`source`. Flagged, not fixed: a system with three source states would say
+this more precisely, but changing the field's cardinality is a schema
+change deferred past this phase.
+
+**`final.action` can differ from `policy.proposed_action` — day 4 addition,
+spec-guardian review.** When a gate blocks the proposed action and §9's
+remediation map has an entry for it (`G2_PREDEBIT` → `SEND_PRE_DEBIT_NOTICE`,
+`G3_AFA` → `CREATE_AFA_LINK`), the remedy itself gets gated fresh — a
+substitute action dispatched on the strength of the *original* action's
+gate pass would itself be an ungated money-relevant action, exactly the
+bypass shape invariant 4 exists to prevent. That re-gating loop is bounded
+at `MAX_REMEDIATION_HOPS = 3` (`api/gates/registry.py`); `gate_results`
+accumulates every hop's verdicts, not just the first pass's, so the Decision
+Tape shows the full chain of reasoning from the original proposal to
+whatever actually dispatched. If the bound is hit without the loop settling,
+nothing dispatches — `final.action` becomes `CLOSE_NO_ACTION` and the case
+is recorded blocked, never an unverified fallback.
+
+```js
 // audit — append-only, hash-chained, the only record of money actions
 {
   _id, case_id, decision_id, ts, actor,     // system | scheduler | human
@@ -352,10 +404,27 @@ the action is later allowed at re-evaluation and actually dispatched — exactly
 the case invariant 9 exists to prevent. A `block` row is terminal for that
 decision cycle: nothing dispatches, so nothing follows it under the same key.
 
-Re-evaluation after a BLOCK computes a **new** idempotency key
-(`case.id:decision.id:action.id`, SPEC §5.6 — a new `decision.id` per
-evaluation), so a later ALLOW never collides with the earlier BLOCK. The
-`(idempotency_key, phase)` unique index holds without change.
+**Day 4 correction (spec-guardian D1).** This section originally said
+re-evaluation after a BLOCK computes a new idempotency key of
+`case.id:decision.id:action.id`, with a fresh `decision.id` per evaluation
+preventing collision with the earlier BLOCK. That formula shipped in
+`api/pipeline.py` and was found to be a real bug, not merely stale prose: a
+`decision_id` freshly generated on *every call* — not just after a BLOCK —
+meant the key could never collide across repeated processing of the *same*
+payment either, making `G10_IDEMPOTENT` and the executor's own
+`DuplicateKeyError` guard structurally unreachable (compliance-auditor F2).
+The key is now `case_id:payment_key:action.id`, where `payment_key` is the
+webhook's own payment id (`invoice_id`/`order_id`/case id as fallbacks) —
+stable across reprocessing of one payment, distinct across genuinely
+different payment attempts, since each is its own payment entity. The
+`(idempotency_key, phase)` unique index still holds without change; a BLOCK
+row for one action and a later ALLOW's pre/post rows for a *different*
+action (the remediation substitute, see §8.2's new note below) naturally
+carry different keys because they name different actions, not because of a
+`decision_id` that changes on every call. `decision_id` itself remains
+useful — every audit row still carries it, and it is now also stored on the
+`decisions` document itself (§8.2) so the two can be joined — but it is no
+longer part of what makes the idempotency key unique.
 
 ### 8.4 Immutability
 
@@ -402,7 +471,38 @@ The product's defining feature. Full clause mapping lives in `COMPLIANCE.md`; su
 
 Every gate module exports `CLAUSE_REF` and `RULE_TEXT`. The build fails if either is missing.
 
+**Scope notes, day 4 addition (spec-guardian review) — each is a decision
+made during implementation, not a silent narrowing:**
+
+- **G1_WINDOW governs contact actions only** (`SEND_PRE_DEBIT_NOTICE`,
+  `CREATE_REAUTH_LINK`, `CREATE_AFA_LINK`, `NUDGE`) — the RBI Fair Practices
+  Code clause governs *contact*, and `RETRY_NOW`/`RETRY_SCHEDULED` are silent
+  auto-debits with no customer-facing message attached, so they are exempt
+  from the 08:00–19:00 window. SPEC §6.3's Case View mock shows G1 blocking a
+  `RETRY_SCHEDULED` proposal; that mock is treated as illustrative, not a
+  literal spec this build deviates from (the same status day 3 already gave
+  POL-004's priority number).
+- **G8_POSTDEBIT is reinterpreted**, since SPEC §4.2's action catalog (A1–A10)
+  has no "send post-debit confirmation" action to gate directly: it blocks a
+  *new* charge action if the customer has no confirmation channel on record
+  (no `contact_hash`/`email_hash`), on the reasoning that dispatching a
+  charge Salvage cannot follow with the RBI-required post-debit alert is
+  itself the violation. Testable (ALLOW/BLOCK), not a rubber stamp — see
+  `api/gates/g8_postdebit.py`'s module docstring.
+- **G6_OPTOUT carves out `CLOSE_NO_ACTION` and `SUPPRESS`** from its own
+  block — an opted-out case must still be closeable and suppressible; gating
+  those two actions on opt-out status would make the gate block the very
+  action opt-out is supposed to produce.
+
 ## 10. Metrics
+
+## 10. Metrics
+
+**OUT OF SCOPE, Sep 2 replan:** reported per arm as a range across 3–5
+seeds, not mean ± 95% CI over 20 seeds — the original protocol below is
+superseded by §11's compressed plan and SALVAGE_SPEC §5.10. Kept here as the
+statement of what each metric measures; the CI language does not apply to
+this submission.
 
 Reported per arm, mean ± 95% CI over 20 seeds:
 
@@ -412,20 +512,32 @@ Net rather than gross is the honesty signal. Cost assumptions live in `eval/cost
 
 ## 11. Release plan
 
+**Replanned 2026-09-02.** Original submission target was Day 10 (2026-09-10);
+the actual window left three days. New target: submit 2026-09-04, hard
+deadline 2026-09-05. Days 1–2 (test setup, ingest) are already done — see
+NOTES.md's 2026-09-01/02 entries. The table below replaces the original
+10-day plan for everything remaining. Full reasoning for what got cut and
+why: NOTES.md, 2026-09-02 entry.
+
 | Day | Milestone | Gate to advance |
 |---|---|---|
-| 1 | Razorpay test setup, real webhook fixtures captured | Fixtures committed |
-| 2 | Ingest: HMAC, idempotency, hash chain | Replay test passes; chain verifies |
-| 3 | Taxonomy + normaliser | 100% branch coverage |
-| 4 | Policy engine | First-match-wins tested; all rules cite |
-| 5 | **Gates G0–G10** | Each gate tested incl. fire-time re-eval |
-| 6 | Executor, dry-run, kill switch, scheduler | Boundary check passes |
-| 7 | Simulator + calibration + sensitivity | Chart produced |
-| 8 | **Eval harness, A/B/C run** | `results.json` committed as-run |
-| 9 | Frontend S1 + S2 | Blocked-chit screenshot exists |
-| 10 | S3, docs, video | Submitted |
+| 3 (Sep 2) | Normalise + diagnose + policy | 100% branch coverage on normaliser; every policy rule cites |
+| 4 (Sep 3) | Gates G0–G10 + executor, dry-run only, no in-doubt reconciliation. One `compliance-auditor` pass on the gates/executor diff — single round, findings fixed same session, not iterated (see CLAUDE.md workflow expectations) | Boundary check passes; each gate tested incl. fire-time re-eval |
+| 5 (Sep 4) | Frontend S1 (minimal) + S2 (Decision Tape) + a batch of 30–50 cases across 3–5 seeds, arms A/B mandatory, arm C conditional (kept only if Day 3's diagnose call makes it near-free to toggle off, cut otherwise) + README/video/submit | Blocked-chit screenshot exists; results reported as a range across seeds, not a CI |
 
-**Slip rule:** cut P1 and screen S3 before cutting Day 5 or Day 8. The gates and the honest numbers are the submission.
+**Cut for this submission — marked here so their absence isn't unexplained
+drift, not deleted from scope (see §6 for the full list with reasons):**
+S3 Batch Evidence screen (the A/B/C comparison table moves into README.md as
+markdown instead), P1 features FR-19–FR-24, P2 features FR-25–FR-27, the
+20-seed/95%-CI eval protocol, and in-doubt reconciliation in the executor.
+The eval reports a range across seeds — "recovery held between X% and Y%
+across N independent runs" — never a confidence interval, and no copy
+anywhere in the codebase or docs implies statistical significance this scope
+doesn't support.
+
+**Slip rule:** cut arm C before cutting the batch itself, and cut nothing
+further from Day 4. The gates, the executor, and an honest (if narrower)
+number are the submission.
 
 ## 12. Risks
 

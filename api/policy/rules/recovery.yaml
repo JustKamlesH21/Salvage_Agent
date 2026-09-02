@@ -1,0 +1,171 @@
+# Policy rules. SPEC §5.4, PRD FR-06, priority bands per
+# .claude/skills/policy-rule-authoring/SKILL.md (see NOTES.md's Phase 3 entry
+# for why the skill's bands are followed instead of SALVAGE_SPEC.md §5.4's
+# worked-example priority numbers, which conflict with them, and for the
+# spec-guardian findings that shaped POL-001/POL-010's split below).
+#
+# Lower `priority` number is evaluated first. First match wins.
+#
+# Bands: 1-19 Stop · 20-39 Escalate · 40-59 Re-auth · 60-79 Retry-scheduled ·
+#        80-89 Retry-now · 90-98 Nudge · 99 catch-all (mandatory, exactly one)
+
+rules:
+  - id: POL-001
+    priority: 10
+    when:
+      failure_class: CREDENTIAL_DEAD
+    then:
+      action: CREATE_REAUTH_LINK
+      stop_all_retries: true
+    because: >
+      Hard decline on a dead instrument. Retrying burns issuer goodwill and
+      can convert a soft decline into a hard one; the only productive move is
+      a customer-initiated re-registration, not another silent charge attempt.
+    cites: ["razorpay/docs/errors/payments/cards", "industry:hard-decline-no-retry"]
+
+  - id: POL-010
+    priority: 15
+    when:
+      failure_class: MANDATE_INVALID
+    then:
+      action: CREATE_AFA_LINK
+      stop_all_retries: true
+    because: >
+      A revoked, paused or expired mandate has no valid authorization left to
+      auto-debit against at all — this is not a decline to retry, it is the
+      absence of a mandate. SPEC §4.1's own default play for this class is
+      "re-registration flow (needs AFA)", so the recovery link must carry an
+      AFA-authenticated registration, not a bare re-auth link (originally
+      collapsed into POL-001's CREATE_REAUTH_LINK; split out per
+      spec-guardian review, since MANDATE_INVALID and CREDENTIAL_DEAD need
+      different actions even though both stop auto-retry).
+    cites: ["razorpay/docs/errors/payments/cards", "industry:hard-decline-no-retry"]
+
+  - id: POL-002
+    priority: 20
+    when:
+      failure_class: UNKNOWN
+    then:
+      action: ESCALATE_HUMAN
+    because: >
+      Neither the deterministic normaliser nor the LLM could confidently
+      diagnose this failure. Guessing at a recovery play risks a wrong or
+      non-compliant action; a human reviews it instead of the system
+      guessing. This is a deliberate honesty feature, not a gap (SPEC §4.1).
+    cites: ["salvage-spec:SALVAGE_SPEC.md#4.1-unknown-honesty-principle"]
+    # This is a third citation form beyond the skill's razorpay/docs and
+    # industry: prefixes — it names our own product design decision, not an
+    # external doc or industry claim, so neither existing prefix fit
+    # honestly (spec-guardian review). See NOTES.md's Phase 3 entry.
+
+  - id: POL-003
+    priority: 45
+    when:
+      failure_class: CREDENTIAL_STALE
+    then:
+      action: CREATE_REAUTH_LINK
+    because: >
+      Expired or reissued cards never recover on blind retry — every attempt
+      is wasted budget. The customer must supply a current instrument; a
+      re-auth link is the only action that can actually fix this.
+    cites: ["razorpay/docs/errors/payments/cards", "industry:hard-decline-no-retry"]
+
+  - id: POL-004
+    priority: 50
+    when:
+      failure_class: AUTH_ABANDONED
+    then:
+      action: CREATE_REAUTH_LINK
+    because: >
+      An abandoned OTP, PIN or authentication step is not a payment
+      capability failure, it is an incomplete customer action. Blind retry
+      repeats the same friction that caused the abandonment; a fresh
+      authenticated link gives the customer another clean attempt.
+    cites: ["razorpay/docs/payments/payment-gateway/rainy-day/errors/error-reasons"]
+
+  - id: POL-005
+    priority: 60
+    when:
+      failure_class: TEMPORARY_LIQUIDITY
+      attempt_count: {lte: 3}
+    then:
+      action: RETRY_SCHEDULED
+      timing: NEXT_PAYDAY_WINDOW
+      channel_note: "manual invoice charge — does not consume subscription retry budget"
+    because: >
+      Insufficient-funds declines clear on salary credit, not on a fixed
+      day-3 timer. Nighttime and pre-payday attempts underperform.
+    cites:
+      - "razorpay/docs/payments/subscriptions/payment-retries"
+      - "industry:payday-aligned-retry"
+
+  - id: POL-006
+    priority: 65
+    when:
+      failure_class: ISSUER_HOLD
+      attempt_count: {lte: 3}
+    then:
+      action: RETRY_SCHEDULED
+      timing: HOURS_24
+      channel_note: "manual invoice charge — does not consume subscription retry budget"
+    because: >
+      Bank-side holds (cutoff windows, deemed/pending states, generic
+      declines with no further detail) typically clear within a day without
+      any customer action. A same-day retry catches the recovery; retrying
+      within minutes does not, since the underlying hold hasn't lifted yet.
+    cites: ["razorpay/docs/payments/payment-gateway/rainy-day/errors/error-reasons"]
+
+  - id: POL-007
+    priority: 70
+    when:
+      failure_class: LIMIT_EXCEEDED
+      attempt_count: {lte: 3}
+    then:
+      action: RETRY_SCHEDULED
+      timing: HOURS_24
+      channel_note: "manual invoice charge — does not consume subscription retry budget"
+    because: >
+      Daily and per-transaction limits reset on a rolling window, not
+      instantly. A same-day retry is more likely to land after the limit has
+      reset than an immediate one, and does not require the customer to do
+      anything themselves.
+    cites: ["razorpay/docs/errors/payments/list"]
+
+  - id: POL-008
+    priority: 80
+    when:
+      failure_class: CHANNEL_DOWNTIME
+    then:
+      action: RETRY_NOW
+      max_delay_minutes: 45
+    because: >
+      Processor-side outages and gateway/bank technical errors typically
+      clear within hours; the authorization window is short, so the
+      recovery play is speed, not a scheduled wait.
+    cites: ["razorpay/docs/errors/payments/cards"]
+
+  - id: POL-009
+    priority: 90
+    when:
+      failure_class: [TEMPORARY_LIQUIDITY, ISSUER_HOLD, LIMIT_EXCEEDED]
+      attempt_count: {gte: 4}
+    then:
+      action: NUDGE
+      channel_note: "Salvage's own 4-attempt budget (G4_BUDGET, on top of Razorpay's T+1/T+2/T+3) is exhausted for this case; contact only, no further auto-charge attempts."
+    because: >
+      Beyond 4 Salvage-initiated attempts, further silent retries risk
+      converting a soft decline into a hard one at the issuer's fraud
+      controls, for diminishing marginal recovery. Contact-only dunning is
+      the honest next step, not another charge attempt.
+    cites: ["industry:retry-ceiling-soft-to-hard-decline-risk"]
+
+  - id: POL-099
+    priority: 99
+    when: {}
+    then:
+      action: CLOSE_NO_ACTION
+    because: >
+      No rule matched this case. Closing with a reason is the honest
+      terminal state; a system that guesses when nothing fits is worse than
+      one that says plainly it found nothing to do.
+    cites: ["salvage-spec:SALVAGE_SPEC.md#4.1-unknown-honesty-principle"]

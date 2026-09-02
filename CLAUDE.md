@@ -59,6 +59,7 @@ Write checks 4–6 on Day 2, before you need them. They are what make self-corre
 - **Test first for gates and the normaliser.** These are the two modules where correctness is the product.
 - **One phase per session where possible.** Phases are defined in PRD §11. End each with `make verify` green and a commit.
 - **Use the subagents.** `compliance-auditor` reviews every diff touching `api/gates/`, `api/policy/`, or `api/executor/`. `spec-guardian` checks for PRD drift at phase end. Do not skip these because the change looks small — the small changes are where bypasses appear.
+- **From Day 4 onward (2026-09-02 replan), `compliance-auditor` runs once per money-path phase, not iteratively.** Findings get fixed in the same session; the loop does not repeat. Three days don't afford day 2's five-round audit cadence.
 - **When you find a real bug, keep the evidence.** Add the failing test, then fix. Bugs found and fixed are demo material for this submission, not embarrassments.
 
 ## Style

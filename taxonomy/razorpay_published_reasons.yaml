@@ -1,0 +1,135 @@
+# The `error.reason` enum as published by Razorpay, fetched live on
+# 2026-09-02 (not from training data — SPEC §13 warns this list goes stale
+# if hardcoded) from:
+#   - razorpay/docs/payments/payment-gateway/rainy-day/errors/error-reasons
+#     (the full reason enum with descriptions + next-steps — primary source)
+#   - razorpay/docs/errors/payments/list
+#     (the same values grouped by source: customer/business/gateway/razorpay;
+#     contributes one reason — mcc_amount_limit_exceeded — not on the first page)
+#
+# Committed independently of taxonomy/failure_classes.yaml so
+# tests/normalise/test_taxonomy.py::test_every_published_reason_has_a_rule
+# is a genuine check against the published list (FR-04's acceptance:
+# "every reason in Razorpay's published list maps to a FailureClass or
+# explicitly to UNKNOWN"), not a tautology that only ever compares the
+# taxonomy file to itself. Found underspecified — no such fixture existed —
+# by spec-guardian's Phase 3 review; see NOTES.md's Phase 3 entry.
+#
+# card_disabled_for_online_payments (used in taxonomy/failure_classes.yaml,
+# sourced from the cards-specific error page's plain-English description
+# rather than confirmed as a literal enum value) is deliberately NOT listed
+# here — it isn't confirmed as a real `error.reason` string, so it isn't
+# claimed as "published" for this coverage check. The taxonomy rule that
+# keys on it is harmless if it never matches a real payload.
+
+reasons:
+  - amount_less_than_minimum_amount
+  - authentication_failed
+  - authorisation_declined_by_psp
+  - bank_account_invalid
+  - bank_account_validation_failed
+  - bank_cutoff_in_progress
+  - bank_not_available
+  - bank_not_enabled
+  - bank_technical_error
+  - beneficiary_account_does_not_exist
+  - beneficiary_account_dormant
+  - capture_failed
+  - card_declined
+  - card_expired
+  - card_network_not_enabled
+  - card_not_enrolled
+  - card_number_invalid
+  - card_type_invalid
+  - collect_on_mcc_blocked
+  - collect_request_pending
+  - compliance_violation
+  - credit_limit_exceeded
+  - credit_limit_expired
+  - credit_limit_inactive
+  - credit_limit_not_approved
+  - credit_not_permitted
+  - credit_failed
+  - debit_declined
+  - deemed_transaction
+  - debit_instrument_blocked
+  - debit_instrument_inactive
+  - duplicate_refund_id
+  - duplicate_request
+  - duplicate_rrn_found
+  - emi_greater_than_max_amount
+  - emi_plan_unavailable
+  - funds_blocked_by_mandate
+  - gateway_technical_error
+  - incorrect_atm_pin
+  - incorrect_card_details
+  - incorrect_card_expiry_date
+  - incorrect_cardholder_name
+  - incorrect_cvv
+  - incorrect_otp
+  - incorrect_pin
+  - input_validation_failed
+  - insufficient_funds
+  - international_transaction_not_enabled
+  - invalid_amount
+  - invalid_currency
+  - invalid_device
+  - invalid_email
+  - invalid_mobile_number
+  - invalid_order_id
+  - invalid_response_from_gateway
+  - invalid_request
+  - invalid_user_details
+  - invalid_vpa
+  - issuer_technical_error
+  - live_mode_not_enabled
+  - mandate_creation_declined
+  - mandate_creation_expired
+  - mandate_creation_failed
+  - mandate_creation_timeout
+  - mcc_amount_limit_exceeded
+  - merchant_not_activated
+  - mismatch_in_transaction_details
+  - mobile_number_invalid
+  - order_already_paid
+  - order_payment_method_mismatch
+  - order_amount_mismatch
+  - otp_attempts_exceeded
+  - otp_expired
+  - payment_amount_tampered
+  - payment_cancelled
+  - payment_collect_request_expired
+  - payment_declined
+  - payment_declined_due_to_high_traffic
+  - payment_failed
+  - payment_method_not_enabled
+  - payment_pending
+  - payment_pending_approval
+  - payment_risk_check_failed
+  - payment_session_expired
+  - payment_timed_out
+  - pin_attempts_exceeded
+  - pin_not_set
+  - psp_app_not_available
+  - psp_app_not_supported
+  - psp_not_available
+  - psp_not_registered
+  - record_not_found
+  - recurring_payment_not_enabled
+  - refund_limit_crossed
+  - reqauth_mandate_not_acknowledged
+  - request_timed_out
+  - server_error
+  - transaction_daily_count_exceeded
+  - transaction_daily_limit_exceeded
+  - transaction_limit_exceeded
+  - transaction_frequency_limit_exceeded
+  - transaction_on_vpa_restricted
+  - upi_app_technical_error
+  - upi_autopay_not_supported_on_psp
+  - upi_collect_not_enabled
+  - upi_intent_not_enabled
+  - user_not_eligible
+  - user_not_registered_for_netbanking
+  - vpa_resolution_failed
+  - verification_failed

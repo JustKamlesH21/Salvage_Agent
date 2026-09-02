@@ -231,6 +231,20 @@ This is the ablation arm C in the eval: run the whole system with step 3 disable
 
 Deterministic. YAML rules, evaluated in priority order, first match wins.
 
+**These three rules are illustrative of the shape, not the committed rule
+set — day 3 note, spec-guardian review.** `api/policy/rules/recovery.yaml`
+is the authority: it has 11 rules covering all 9 FailureClasses, priority
+numbers follow `.claude/skills/policy-rule-authoring/SKILL.md`'s band table
+rather than the numbers below (POL-004's `priority: 40` here sits inside
+that table's Re-auth band despite being a retry-scheduled rule — the two
+documents disagreed, and the skill's bands won), and POL-001 below is split
+into two rules in the real file: `CREDENTIAL_DEAD` keeps `CREATE_REAUTH_LINK`,
+but `MANDATE_INVALID` moved to its own rule (`POL-010`) with
+`CREATE_AFA_LINK` instead — this file's own §4.1 table already said
+`MANDATE_INVALID`'s default play is "re-registration flow (**needs AFA**)",
+which the original combined rule below didn't honour. See NOTES.md's Phase 3
+entry for the full account.
+
 ```yaml
 - id: POL-001
   priority: 10
@@ -297,10 +311,18 @@ Every gate module exports `CLAUSE_REF` and `RULE_TEXT`. The build fails if eithe
 
 ### 5.6 Executor
 
+**Day 4 correction (spec-guardian D1):** the idempotency key below was
+`f"{case.id}:{decision.id}:{action.id}"` in the original pseudocode. Built
+literally, that made the key unique on *every call* (a fresh `decision.id`
+every time), which made the executor's own `DuplicateKeyError` guard and
+`G10_IDEMPOTENT` structurally unreachable — found as compliance-auditor F2.
+`case.id`/`action.id` still anchor it; `decision.id` does not — see PRD
+§8.3.1 for the corrected key and why.
+
 ```python
 def execute_action(case, decision, action, *, dry_run: bool) -> ActionResult:
     assert action.id in ACTION_CATALOG          # bounded set
-    idem = f"{case.id}:{decision.id}:{action.id}"
+    idem = f"{case.id}:{payment_key}:{action.id}"  # payment_key: stable across reprocessing, see PRD §8.3.1
     if kill_switch.engaged():                   # G0_KILL first, always
         return blocked(...)
     try:
@@ -366,14 +388,21 @@ Every number lives in `sim/calibration.yaml` with a `source:` field marked *meas
 
 ### 5.10 Eval harness
 
-**Cohort:** 500 synthetic mandates. Realistic mix — roughly 40% `TEMPORARY_LIQUIDITY`, 15% `CREDENTIAL_STALE`, 10% `CHANNEL_DOWNTIME`, 8% `ISSUER_HOLD`, 7% `AUTH_ABANDONED`, 6% `CREDENTIAL_DEAD`, 5% `MANDATE_INVALID`, 4% `LIMIT_EXCEEDED`, 5% `UNKNOWN`. Amounts log-normal, ₹199–₹95,000, with a deliberate slice above the ₹15,000 AFA line and a slice in the insurance/MF category to exercise G3's ₹1L branch.
+**Replanned 2026-09-02** (submission compressed to a 3-day window — see
+PRD §11 and NOTES.md's 2026-09-02 entry). The protocol below replaces the
+original 500-case/20-seed/95%-CI design.
+
+**Cohort:** 30–50 synthetic mandates per run. Realistic mix — roughly 40% `TEMPORARY_LIQUIDITY`, 15% `CREDENTIAL_STALE`, 10% `CHANNEL_DOWNTIME`, 8% `ISSUER_HOLD`, 7% `AUTH_ABANDONED`, 6% `CREDENTIAL_DEAD`, 5% `MANDATE_INVALID`, 4% `LIMIT_EXCEEDED`, 5% `UNKNOWN`. Amounts log-normal, ₹199–₹95,000, with a deliberate slice above the ₹15,000 AFA line and a slice in the insurance/MF category to exercise G3's ₹1L branch.
 
 **Arms:**
-- **A — Baseline.** Razorpay default: T+1, T+2, T+3, then halt. Plus one generic dunning email.
-- **B — Salvage.** Full stack.
-- **C — Ablation.** Salvage with LLM diagnosis disabled (normaliser + policy only).
+- **A — Baseline.** Razorpay default: T+1, T+2, T+3, then halt. Plus one generic dunning email. Mandatory.
+- **B — Salvage.** Full stack. Mandatory.
+- **C — Ablation.** Salvage with LLM diagnosis disabled (normaliser + policy only). **Conditional** — kept only if Day 3's diagnose call is built so that disabling it is near-free (a flag, not a rewrite); cut first if Day 5 morning runs tight.
 
-**Protocol:** 20 seeds per arm, same seeds across arms. Report mean ± 95% CI.
+**Protocol:** 3–5 seeds per arm, same seeds across arms. **Report a range, not
+a confidence interval:** "recovery held between X% and Y% across N
+independent runs." N is 3–5, not enough for a defensible CI — do not compute
+or imply one anywhere in the codebase, docs, README, or video.
 
 **Metrics table (this is the money slide):**
 
@@ -586,25 +615,35 @@ Pick #1 and #4 for the video. #4 is the more sophisticated one and almost nobody
 
 ## 10. Build order
 
+**Replanned 2026-09-02** — three days remain, not ten. Days 0–2 below are
+already done (see NOTES.md). The plan from Day 3 forward is compressed; see
+PRD §11 for the authoritative table and the full trade.
+
 | Day | Ship | Done when |
 |---|---|---|
 | 0 | Repo scaffolding, MongoDB layer, verification harness, agents, skills | `make verify` runs and fails honestly |
 | 1 | Razorpay test setup, plans/subs, ngrok, capture real payloads | Real JSON committed to `tests/fixtures/` |
 | 2 | Ingest: HMAC, dedupe, hash chain | Duplicate-replay test passes; chain verifies |
-| 3 | Taxonomy YAML + normaliser + full unit tests | 100% branch coverage; unmapped count reported |
-| 4 | Policy engine + rules | First-match-wins tested; all rules cite |
-| 5 | **Compliance gates G0–G10 + clause refs** | Every gate tested incl. fire-time re-eval |
-| 6 | Executor, dry-run, kill switch, scheduler, audit writer | Boundary check passes |
-| 7 | Simulator + calibration.yaml + CALIBRATION.md | Sensitivity run produces a chart |
-| 8 | Eval harness, run A/B/C × 20 seeds, commit results **as produced** | `eval/results.json` committed with CIs |
-| 9 | Frontend S1 + S2 (Command Deck + Decision Tape) | The blocked-chit screenshot exists |
-| 10 | S3, README, ARCHITECTURE.md, LIMITATIONS.md, 5-min video | Submitted |
+| 3 (Sep 2) | Taxonomy YAML + normaliser + full unit tests, LLM diagnosis, policy engine + rules | 100% branch coverage; unmapped count reported; first-match-wins tested; all rules cite |
+| 4 (Sep 3) | **Compliance gates G0–G10 + clause refs** + executor, dry-run only, kill switch, no in-doubt reconciliation. One `compliance-auditor` pass, single round, findings fixed same session | Every gate tested incl. fire-time re-eval; boundary check passes |
+| 5 (Sep 4) | Frontend S1 (minimal) + S2 (Command Deck + Decision Tape); eval harness, run A/B (C conditional) × 3–5 seeds, commit results **as produced**; README, video, submit | The blocked-chit screenshot exists; `eval/results.json` committed with a range across seeds, not CIs |
 
-**Slip rule:** if you're behind on Day 8, cut S3 and P1 features. Never cut Day 5 or Day 8. The gates and the honest numbers *are* the submission.
+**Cut:** simulator calibration sensitivity chart (F22, out of scope — see
+PRD §6), S3 Batch Evidence (the A/B/C table moves into README.md instead),
+ARCHITECTURE.md as a separate polish pass (fold into README if time allows).
+
+**Slip rule:** cut arm C before cutting the eval batch itself, and cut
+nothing further from Day 4. The gates and the executor are the submission;
+an honest narrower number beats a wide one run out of time.
 
 ---
 
 ## 11. Video beat sheet (5:00)
+
+**Replanned 2026-09-02:** the S3-dependent beat (sensitivity chart, CI table)
+is cut along with S3 itself — see PRD §11. A new beat names the in-doubt
+reconciliation cut explicitly, as a stated engineering tradeoff under time
+pressure, not a doc footnote.
 
 | Time | Beat |
 |---|---|
@@ -612,10 +651,11 @@ Pick #1 and #4 for the video. #4 is the more sophisticated one and almost nobody
 | 0:25–0:50 | Thesis: "The LLM diagnoses. It never decides to move money." Show the architecture diagram, point at the deterministic boundary. |
 | 0:50–2:00 | **Live case walkthrough.** ₹18,000, insufficient funds, 23:14. Three gates fire. Replan. Show the Decision Tape with the overprinted clauses. |
 | 2:00–2:40 | The doc-grounded lever: manual invoice charge doesn't consume the subscription's retry budget, so Salvage adds precisely-timed attempts without spending the safety net. |
-| 2:40–3:40 | **Batch results.** A/B/C table with CIs. Net recovery, not gross. Zero compliance violations. Wasted-attempts-on-hard-declines comparison. Sensitivity chart. |
-| 3:40–4:20 | **What broke.** Duplicate webhook replay, live. Scheduler drift → fire-time gate re-eval. Then `verify_chain.py` — tamper-evident audit trail. |
-| 4:20–4:45 | Exception desk. What the agent refused to handle and why. |
-| 4:45–5:00 | Limitations, verbatim from LIMITATIONS.md. Kill switch. End. |
+| 2:40–3:20 | **Batch results.** A/B (and C if kept) table, in README.md, reported as a range across 3–5 seeds — not a confidence interval, and we say that on camera. Net recovery, not gross. Zero compliance violations. Wasted-attempts-on-hard-declines comparison. |
+| 3:20–3:40 | **The tradeoff, said plainly:** "We had three days, not ten. We chose to ship the compliance gates and the executor complete, and cut two things on purpose: a statistically powered eval, and reconciliation for the case where the executor crashes mid-dispatch — that failure mode is undefined right now, and it's written down in LIMITATIONS.md rather than hidden." |
+| 3:40–4:15 | **What broke.** Duplicate webhook replay, live. Scheduler drift → fire-time gate re-eval. Then `verify_chain.py` — tamper-evident audit trail. |
+| 4:15–4:40 | Exception desk. What the agent refused to handle and why. |
+| 4:40–5:00 | Remaining limitations, verbatim from LIMITATIONS.md. Kill switch. End. |
 
 Volunteering weaknesses before the panel finds them is the highest-leverage move available in the defence round. Budget real time for it.
 

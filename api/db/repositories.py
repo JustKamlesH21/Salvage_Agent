@@ -260,6 +260,16 @@ class AuditRepository(_ChainedAppendOnly):
         cursor = self._c.find({"case_id": case_id}).sort([("ts", ASCENDING)])
         return [doc async for doc in cursor]
 
+    async def any_phase_exists(self, idempotency_key: str) -> bool:
+        """G10_IDEMPOTENT's lookup: does *any* row (pre, post, or block) exist
+        for this key, regardless of phase. Distinct from `prior_result()`,
+        which is scoped to `phase: post` for the executor's own re-dispatch
+        check — G10 is a broader, informational, Decision-Tape-visible signal,
+        not the structural guarantee (that's the unique index itself).
+        """
+        found = await self._c.find_one({"idempotency_key": idempotency_key}, projection={"_id": 1})
+        return found is not None
+
 
 class _Mutable:
     """Base for the collections that legitimately change."""

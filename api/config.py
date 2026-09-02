@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     llm_fallback_api_key: str = ""
     llm_fallback_model: str = ""
     llm_template_model: str = ""
+    # Skips the LLM call entirely when true — the normaliser's output passes
+    # straight through as the diagnosis. This is arm C (SPEC §5.10): Salvage
+    # with LLM diagnosis disabled. Never affects invariant 2 either way — the
+    # normaliser already wins over anything but UNKNOWN regardless of this flag.
+    disable_llm: bool = False
 
     # Safety controls. DRY_RUN defaults true (invariant 8) — this default is
     # load-bearing, not cosmetic. Do not change it to make a demo easier.

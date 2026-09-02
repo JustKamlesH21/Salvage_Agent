@@ -5,8 +5,9 @@ because those two modules are where correctness is the product. Today both are
 empty packages, so coverage reports 100% of zero statements — a vacuous pass.
 
 This test makes that vacuity a visible failure instead of a green tick. It goes
-away on its own: the normaliser lands on day 3 and the gates on day 5 (PRD §11).
-Do not delete it to get a green run.
+away on its own: the normaliser lands on day 3 and the gates on day 4 (PRD §11,
+compressed replan — was day 5 in the original 10-day plan). Do not delete it to
+get a green run.
 """
 
 from __future__ import annotations
@@ -40,5 +41,5 @@ def test_covered_package_has_code_to_cover(package: str) -> None:
         f"{package}/ contains no measurable code, so its 100% branch-coverage "
         f"requirement passes over nothing. This is expected on day 0 and is the "
         f"scaffold telling the truth: the normaliser lands on day 3 and the gates "
-        f"on day 5 (PRD §11). This test turns green when they do."
+        f"on day 4 (PRD §11, compressed replan). This test turns green when they do."
     )

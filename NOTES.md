@@ -1043,3 +1043,469 @@ how many rounds it goes. `spec-guardian`'s job — checking the *whole* diff
 against the *contract* — is not redundant with `compliance-auditor`'s even
 when both run at the same phase close; this is the concrete case where
 skipping one would have shipped a real bug.
+
+---
+
+### 2026-09-02 — replan: submission compressed from a 10-day to a 3-day window
+
+**Original target:** submit ~2026-09-11 (Day 10 of the original PRD §11
+plan). **New target:** submit 2026-09-04, hard deadline 2026-09-05. Days 1–2
+(Razorpay test setup, ingest) are already built and closed; three days of
+work remain, not eight.
+
+**The trade, stated once so the reasoning is visible later and not just the
+outcome:** statistical rigor in the eval (the original 500-case/20-seed/
+95%-CI protocol) and in-doubt reconciliation in the executor (resolving a
+crash between dispatch and the post-audit write) are both cut, in exchange
+for keeping the full agent loop — normalise, diagnose, policy, all eleven
+gates, the executor — complete and demoable, plus enough frontend (Command
+Deck + Decision Tape) to make the compliance thesis visible on screen. A
+narrower system that fully works and is honestly measured beats a broader
+one that is thin everywhere or measured with a rigor the timeline can't
+actually back up. Between "smaller and true" and "bigger and overclaimed,"
+this project takes smaller and true — same instinct as the net-vs-gross
+recovery number and the doc-derived-baseline admission already in
+`LIMITATIONS.md`.
+
+**What changed, concretely** (full detail in PRD §11 and §6, SALVAGE_SPEC
+§5.10/§10/§11, `LIMITATIONS.md`):
+
+- Eval: 500 cases × 20 seeds × arms A/B/C with 95% CIs → 30–50 cases × 3–5
+  seeds × arms A/B (C conditional on Day 3's diagnose call being cheap to
+  toggle), reported as a range across seeds, not a CI.
+- S3 Batch Evidence screen cut; its A/B/C table moves into README.md as
+  markdown.
+- Executor in-doubt reconciliation cut; the pre/post audit idempotency
+  guarantee (invariant 9) is unaffected, but nothing yet resolves a
+  pre-row-with-no-post-row left by a mid-dispatch crash. Logged in
+  `LIMITATIONS.md`, not silently absent.
+- All P1 (FR-19–FR-24) and P2 (FR-25–FR-27) features are out of scope,
+  marked in place in PRD §6 rather than deleted, so `spec-guardian` doesn't
+  read their absence as unexplained drift.
+- `compliance-auditor` cadence changes from Day 4 onward: one pass per
+  money-path phase, findings fixed same session, not the iterative
+  multi-round loop day 2's storage layer got (five rounds, thirteen
+  findings — see the entries above). Three days don't afford that cadence
+  twice.
+
+*Why now:* the replan happens at the start of Day 3, before any Day
+3-forward feature code is written, so the compressed plan is the one being
+built against from the first line rather than retrofitted after the fact.
+*Class:* other — scope/schedule, not a bug.
+
+---
+
+### 2026-09-02 — day 3: normalise + diagnose + policy built, spec-guardian's
+first real-money-path-adjacent review, and two correctness bugs found before
+the code ever reached a gate **demo**
+
+Built `taxonomy/failure_classes.yaml` (114 rules — 110 of Razorpay's
+published `error.reason` values plus a description-only fallback for the
+Dashboard forced-charge artifact and two `error_code`-only fallbacks),
+`api/normalise/` (pure `classify()`, 100% branch coverage — the pyproject
+gate is now measuring real code, not an empty package), `api/diagnose/`
+(Groq call, Pydantic-constrained `RootCause`, one repair retry, `DISABLE_LLM`),
+and `api/policy/` (11 priority-ordered rules, every one cited). Full design
+reasoning is in the approved plan this session started from; this entry is
+what changed after that plan, not a restatement of it.
+
+**The taxonomy was built from Razorpay's docs fetched live this session**
+(`razorpay/docs/payments/payment-gateway/rainy-day/errors/error-reasons`,
+`razorpay/docs/errors/payments/list`, `razorpay/docs/errors/payments/cards`),
+not from training data — SPEC §13's own warning about this list going stale
+if hardcoded. `taxonomy/razorpay_published_reasons.yaml` commits the fetched
+list independently of the classification file, so FR-04's acceptance
+("every reason... maps to a FailureClass or explicitly to UNKNOWN") is a
+checked property (`tests/normalise/test_taxonomy.py::test_every_published_reason_has_a_rule`),
+not an assertion resting on the same file it's checking.
+
+**The honest coverage number, since FR-04/SPEC §10 ask for it:** of 110
+published reasons, 56 classify into one of the 8 real `FailureClass` values
+and 54 classify `UNKNOWN` by design — 28 are merchant/integration errors
+(not a customer payment failing at all), 24 are real Razorpay reasons for a
+flow Salvage's domain never triggers (raw card/VPA re-entry on a stored
+mandate that's never re-collected, or Cardless EMI — out of PRD §5's scope),
+2 are genuinely ambiguous and flagged rather than force-fit. **Only 1 of 110
+has a real fixture behind it** — `payment_failed` (fixture 029). The other
+109 are doc-only, because Phase 1 already found Razorpay's documented test
+declines don't reproduce in this account (day-1 close entry, above). Recorded
+in `LIMITATIONS.md` now with the real numbers, not the placeholder text it
+carried from Phase 1.
+
+**Two judgment calls confirmed with the user before building, not decided
+alone:** generic no-detail declines (`card_declined`, `payment_declined`,
+`debit_declined`) → `ISSUER_HOLD` rather than `CREDENTIAL_DEAD` (asymmetric
+risk: a wrong retryable guess costs one attempt, a wrong terminal guess
+silently stops all recovery on a case that was actually fine); and
+`payment_failed` (the one real fixture) → `CHANNEL_DOWNTIME`, using its
+`source: gateway` field as the tiebreaker.
+
+**`spec-guardian`, run per CLAUDE.md's phase-close workflow, found two real
+correctness bugs — both the exact asymmetric-risk mistake the judgment calls
+above were built to avoid, just missed on two other entries:**
+
+1. **`international_transaction_not_enabled` was misfiled as `CREDENTIAL_DEAD`.**
+   It's a capability switch the customer can turn back on — the same shape
+   as `card_not_enrolled`/`card_disabled_for_online_payments`, both correctly
+   `CREDENTIAL_STALE`. Filed under `CREDENTIAL_DEAD` it would have set
+   `stop_all_retries: true` on a recoverable case the first time a real
+   payload hit it. Moved to `CREDENTIAL_STALE`; same no-blind-retry handling,
+   different (non-permanent) class. *Class:* correctness.
+
+2. **`MANDATE_INVALID` was routed through the same policy rule as
+   `CREDENTIAL_DEAD` (`POL-001` → `CREATE_REAUTH_LINK`), but SPEC §4.1's own
+   table says `MANDATE_INVALID`'s default play is "re-registration flow
+   (needs AFA)"** — i.e. `A5 CREATE_AFA_LINK`, not `A4 CREATE_REAUTH_LINK`.
+   Inherited from copying SALVAGE_SPEC.md §5.4's worked example verbatim
+   without checking it against §4.1's own class table, which disagreed with
+   it. Split into `POL-001` (`CREDENTIAL_DEAD` only) and a new `POL-010`
+   (`MANDATE_INVALID` → `CREATE_AFA_LINK`), both still `stop_all_retries`.
+   *Class:* correctness / spec-drift — the two SPEC sections contradicted
+   each other and the code had silently picked one side.
+
+**Five more findings, all documentation/honesty gaps, all fixed in this
+commit:** NFR-01's wording said "LLM call capped at 8s" but the code applies
+that cap per HTTP request with one repair retry, so the real worst case per
+decision is ~16s — PRD §7 now says this explicitly rather than overclaiming
+a tighter bound than the code delivers. SPEC §5.3 rule 3 ("log both
+attempts") wasn't implemented — `llm_raw` kept only the last attempt after a
+repair; `api/diagnose/client.py` now joins both, labelled, into the one
+`llm_raw` string PRD §8.2 defines. The taxonomy's fallback-rule ordering
+(reason-keyed rules must sort before the code+description fallback) was
+convention, not a checked property — now pinned by a test. `POL-002`/
+`POL-099` cited a `industry:` slug (`fail-closed-on-uncertain-diagnosis`)
+that names an internal design principle, not an industry practice claim or a
+Razorpay doc — re-cited to point at `SALVAGE_SPEC.md §4.1` directly instead,
+under a new `salvage-spec:` citation form (documented where it's used, not
+silently invented). SALVAGE_SPEC.md §5.4's worked example (`POL-004`,
+`priority: 40`) is now annotated as illustrative-only, since the real file
+uses the policy-rule-authoring skill's priority bands instead — SPEC's
+number sits inside the skill's Re-auth band despite being a retry-scheduled
+rule, a conflict between the two documents that predates this phase; the
+skill's bands won because it's the actively-maintained authoring guide.
+
+**One documented-and-deferred design decision:** `Diagnosis.source` stays
+`"llm"` even on the rare path where the normaliser is `UNKNOWN` and the LLM
+fails validation or times out on *both* attempts — there's no diagnosis to
+attribute either way, but the field only has two values (PRD §8.2) and an
+LLM call genuinely was attempted, which "deterministic_override" doesn't
+describe either. The honest fact lives in `evidence[0]`, not `source`.
+Flagged in PRD §8.2 rather than silently resolved; a three-state `source`
+would say this more precisely but that's a schema change for another day.
+
+**Two open questions surfaced by spec-guardian, deliberately NOT resolved
+this session — Day 4's call, not mine to make alone under a compressed
+timeline:**
+
+- **No policy rule can ever propose `SEND_PRE_DEBIT_NOTICE` (A3) or
+  `CREATE_AFA_LINK` (A5) for a case that isn't already `MANDATE_INVALID`,
+  because `PolicyContext` deliberately carries no amount** — that routing
+  was scoped to the gate chain (G2_PREDEBIT/G3_AFA, PRD §9) by this
+  session's approved plan, on the reasoning that "gates decide what is
+  permitted, policy decides what is worth doing." SPEC §5.5's formal gate
+  contract (`ALLOW`/`BLOCK`/`REPLAN(new_ts, clause)`) doesn't obviously
+  support a gate *substituting* a new action the way SPEC §6.3's Case View
+  mock shows (three actions executing after one REPLAN) — that's a real
+  tension inside SPEC itself, not something this phase's policy work
+  created. Whoever builds Day 4's gates needs an answer before G3_AFA can
+  do anything with a >₹15,000 case; this note is so it isn't discovered
+  fresh that morning.
+- **`PolicyContext.attempt_count`'s source is unbound.** PRD §8.2's `cases`
+  shape has both `attempts: [{source: rz_auto|salvage_manual}]` and a
+  separate `salvage_attempt_count` field "drives G4_BUDGET" — `POL-009`'s
+  `channel_note` asserts the Salvage-only reading (matching CLAUDE.md's "do
+  not accidentally design away" instruction on this exact lever), but
+  nothing wires it yet, since case/attempt tracking doesn't exist before
+  Day 4. If it's ever wired from total attempts including Razorpay's own
+  T+1/T+2/T+3, POL-009 fires after roughly one Salvage attempt instead of
+  four, which is exactly the lever CLAUDE.md warns not to design away.
+
+*How found:* the taxonomy, is_recoverable table and priority-band decisions
+were built and cross-checked by hand against SPEC §4.1/§5.4/§5.5 during the
+build; `spec-guardian`, run once per this phase's money-path-adjacent diff
+(CLAUDE.md's Day 4-onward cadence rule, applied here a day early since this
+diff already touches the policy engine), found the two real bugs and the
+five documentation gaps a self-review missed. *Class:* correctness (the two
+misfiled classes) / spec-drift (the SPEC-vs-skill priority bands, the
+SPEC-self-contradiction on `MANDATE_INVALID`) / harness honesty (the
+taxonomy coverage numbers, the fallback-ordering test, the published-reasons
+fixture) / documentation (NFR-01's wording, the citation re-point).
+
+`make verify`: green on lint, format, `mypy --strict`, boundaries, chain, and
+web. Red on exactly the two Day-4 placeholders (pytest's `api/gates`
+coverage-floor check, the clause check's 11-gate list) — the scaffold
+telling the truth, not a regression. 292 tests pass; `api/normalise` holds
+100% branch coverage.
+
+---
+
+### 2026-09-03 — day 4: gates G0-G10, executor, pipeline wired — `make verify`
+8/8 for the first time, and a real full-chain bypass found and closed before
+anything shipped **demo**
+
+Built all eleven gates (`api/gates/`), the executor (`api/executor/`,
+including a new `arm.py` — see below), a pure fire-time scheduler
+(`api/scheduler/`), and `api/pipeline.py` — the webhook → normalise →
+diagnose → policy → gates → executor → audit wiring Day 3 explicitly left
+for today. `make verify` went 8/8 for the first time in the project: lint,
+format, `mypy --strict`, 100% branch coverage on `api/gates` *and*
+`api/normalise`, boundaries, clauses (all eleven gates cite, all eleven
+policy rules explain), chain, web build. 426 tests pass.
+
+**Two open questions Day 3 left explicitly for today were resolved, not
+deferred again** (both in the approved plan, both cross-checked against
+`.claude/skills/gate-authoring` which I hadn't read yet on Day 3):
+
+1. *How does a gate-BLOCKed action become the compensating action SPEC
+   §6.3's Case View mock shows (a pre-debit notice, an AFA link)?* Resolved
+   with a **remediation map** in `api/gates/registry.py` — `{"G2_PREDEBIT":
+   SEND_PRE_DEBIT_NOTICE, "G3_AFA": CREATE_AFA_LINK}` — outside both policy
+   and gates, so the ₹15,000/24h thresholds each gate owns are never
+   duplicated. The gate-authoring skill itself settled the companion
+   question of *whether policy should know about amount at all*: "G3_AFA
+   above the threshold does not replan... it blocks, and the policy engine
+   proposes an AFA link instead" — read only today, and it directly informed
+   this design (policy still doesn't see amount; the remediation map is the
+   layer that reacts to *which* gate blocked, per the skill's own framing of
+   gates deciding what's permitted and policy/remediation deciding what's
+   done about it).
+2. *Whose attempt count feeds G4_BUDGET/POL-009 — Salvage's own, or
+   Razorpay's T+1/T+2/T+3 too?* Resolved: `PolicyContext.attempt_count` and
+   `GateContext.salvage_attempts_in_window` are both derived from `audit`
+   rows for `RETRY_NOW`/`RETRY_SCHEDULED` specifically — Razorpay's own
+   auto-retries never touch `audit` at all, so they structurally cannot
+   inflate this count. The lever CLAUDE.md warns not to design away is
+   intact by construction, not by discipline.
+
+**G1_WINDOW's scope was confirmed with you before building**, not decided
+alone: gates customer-contact actions only (notices, links, nudges), exempt
+for silent `RETRY_NOW`/`RETRY_SCHEDULED` — the cited RBI circular
+(DOR.ORG.REC.65/21.04.158/2022-23) governs recovery-agent *contact*, not
+auto-debit timing, even though SPEC §6.3's illustrative mock shows G1
+blocking a plain retry. Same treatment as Day 3's POL-004 priority-number
+finding: SPEC's mock is flavour, not a literal contract this deviates from.
+**Scheduler scope was also confirmed**: `fire_due_jobs()` is a pure, fully
+tested function (including the literal 10:00-scheduled/19:30-fired/G1-replans
+test you asked for by name); no live APScheduler thread was wired in —
+deliberately, per that confirmation, though `compliance-auditor` later
+sharpened *why* that matters (see F6 below).
+
+**Regulatory sourcing for `RULE_TEXT`** — the gate-authoring skill is
+explicit that this must be a quotation, not a summary from memory, and to
+stop and say so if the clause can't be found. Fetched live this session
+(WebSearch, since no available tool can pull the raw RBI PDFs): RBI circular
+DOR.ORG.REC.65/21.04.158/2022-23 (12 Aug 2022) for G1's 8am–7pm window;
+the RBI Digital Payments E-mandate Framework, 2026 (RBI/DPSS/2026-27/396, 21
+Apr 2026 — matches PRD's existing citation) for G2/G3/G6/G8, cross-corroborated
+by multiple independent secondary sources on the ₹15,000/₹1,00,000 figures
+and the 24h pre-debit and post-debit-alert requirements. `COMPLIANCE.md` says
+plainly this is corroborated secondary sourcing, not verbatim primary text —
+a materially stronger basis than memory, but a different claim, and the file
+doesn't blur the two.
+
+**`compliance-auditor`, run once per this session's instruction (no
+iteration), found eleven issues — two of them critical, and the two that
+matter most are both full-chain-bypass-shaped, which is exactly the
+"reachable execute_action() without a full gate traversal" question you
+asked to be told about first if it turned up:**
+
+**F1 — CRITICAL. The remediation action itself was never gated.** When
+`resolve_final_action()` substituted a remedy (say, `SEND_PRE_DEBIT_NOTICE`
+for a blocked `RETRY_NOW`), the pipeline dispatched *that* action directly —
+`evaluate_chain()` was never re-run against it. Reproduced concretely: a
+notice dispatched outside G1's window with no scheduler involved at all; an
+opted-out customer still contacted because the co-occurring G3_AFA block's
+remedy was chosen over G6_OPTOUT's terminal `SUPPRESS`; a cooldown-violating
+notice sent because G5 doesn't apply to the *proposed* charge action being
+gated, only to the remedy that never got checked. The shipped e2e test had
+locked in exactly this shape as "correct" (dispatching a notice on a case
+G8_POSTDEBIT had just said has no reachable channel). **Fixed:** both
+`api/pipeline.py` and `api/scheduler/runner.py` now re-gate any remedy
+fresh, in a bounded loop (`MAX_REMEDIATION_HOPS = 3`, proven to settle in one
+hop today since G2/G3's only remedies are contact actions and G2/G3 only
+gate charge actions) — REPLAN reschedules, a further BLOCK falls to a
+terminal action, ALLOW dispatches only once verified on its own account.
+`suppressed` now accumulates across hops instead of being overwritten by
+whichever hop settles last (a second bug this fix's own first draft
+introduced and the pipeline test caught immediately).
+
+**F2 — CRITICAL. The idempotency key could never collide.**
+`f"{case_id}:{decision_id}:{action.value}"` used a fresh `uuid4()`
+`decision_id` on every call, so `G10_IDEMPOTENT` and the executor's own
+insert-first `DuplicateKeyError` guard were structurally dead on this path —
+reprocessing the same failed payment would double-dispatch, with nothing but
+Phase 2's event-level dedupe (not wired to this pipeline at all) standing in
+the way. **Fixed:** the key is now `f"{case_id}:{payment_key}:{action}"`
+where `payment_key` is the webhook's own payment id (falling back to
+`order_id`, then the case id) — stable across reprocessing of the *same*
+underlying payment, while still varying naturally across genuinely distinct
+retry attempts, since each one is its own payment entity.
+
+**Five more findings, all fixed the same session:** F3 (amount read from a
+case document written once and never updated, so a later, larger failure on
+the same case could pass G3_AFA on a stale smaller figure) — `amount_paise`
+is now an explicit, per-call argument sourced from the current webhook
+payload; the remaining staleness (`category`, `subscription_status`,
+`salvage_attempt_count`) is a real Day-4 scope boundary, documented in
+LIMITATIONS.md's new "Money path" section rather than silently accepted. F4
+(invariant 8's arm mechanism didn't exist at all — `DRY_RUN=false` alone
+reached live dispatch, contradicting CLAUDE.md and the Makefile/README's own
+claims) — new `api/executor/arm.py`, `execute_action()` now refuses the live
+branch without it, docs corrected to describe the mechanism that actually
+exists rather than a `/control/arm` route that doesn't. F5 (budget/cooldown
+counted only `post` audit rows, undercounting a dispatch that died
+mid-flight — unsafe direction, since under-counting means over-attempting) —
+now counts `pre`+`post`, deduplicated by key. F7 (G2's `RULE_TEXT` cited
+notice-content requirements — merchant name, amount, mandate ref — the code
+doesn't verify, only the 24h lead time) — narrowed to what's actually
+checked; a false citation is worse than a narrower true one, same principle
+Phase 3's citation fixes already established. F9 (the bounded-catalog check
+was a bare `assert`, stripped under `python -O`) — explicit `ValueError`.
+
+**Two findings kept out of code, deliberately, and documented rather than
+rushed:** F6 (a `REPLAN` verdict is recorded and then dropped — no
+`ScheduledJob` is ever persisted, so `fire_due_jobs()` — fully built and
+tested — has no caller at all, live or offline) and F8 (`G6_OPTOUT` fails
+open when a case has no resolvable `customer_id`, the common shape for real
+captures — but nothing calls `CustomerRepository.set_opt_out()` yet, so
+failing closed unconditionally would break dispatch for most real payloads
+to close a door nothing can currently open). Both in LIMITATIONS.md's new
+"Money path (Day 4)" section with the reasoning, not just the gap.
+
+**One collision found and fixed along the way, worth naming because it's a
+sharp Python trap:** `api/executor/__init__.py` re-exports the `arm`
+function under that same bare name, which shadows the `api.executor.arm`
+*submodule* as an attribute of the package — meaning `import api.executor.arm
+as x` inside `executor.py` resolved to the function, not the module, even
+though `sys.modules['api.executor.arm']` genuinely holds the real submodule.
+`from api.executor.arm import is_armed` (naming the function directly,
+bypassing the package's own attribute table) sidesteps it. Documented
+in-line since the trap is permanent as long as the package re-exports a name
+that collides with one of its own submodules.
+
+*How found:* `compliance-auditor`, briefed explicitly to answer "does
+anything reach `execute_action()` without a full gate traversal" as the
+single most important question. *Class:* correctness / compliance (F1, F2 —
+both real bypasses, not design questions), hardening (F4, F9), correctness
+(F5, F3's amount half), documentation (F7, COMPLIANCE.md rewritten to match
+what each gate actually checks), scope discipline (F6, F8, F3's remaining
+half — logged, not silently absent).
+
+**`spec-guardian`, run after all `compliance-auditor` fixes landed, found
+something worth stating plainly first: two of its findings (G2, G3) were a
+reintroduction of F1's exact bypass shape — same hole, different branch,
+introduced by my own first fix for F1.**
+
+**G2/G3 — the hop-exhaustion fallback dispatched an unverified action, the
+same class of bug F1 exists to prevent.** F1's fix re-gated every remedy in
+a bounded loop, but the branch that runs when the loop exhausts its hop
+budget without settling — in *both* `api/pipeline.py` and
+`api/scheduler/runner.py`, independently, since the loop was duplicated
+between them — fell back to dispatching `CLOSE_NO_ACTION` directly, with no
+gate check on that fallback either. An unreachable-in-practice case today
+(G2/G3's only remedies are contact actions, and contact actions trivially
+clear G2/G3), but the loop is a defensive bound precisely for cases that
+aren't reachable *today*, and "the safety net has a hole shaped exactly like
+the thing it's supposed to catch" is the finding, not the reachability
+question. **Fixed** by extracting the whole loop into one shared,
+independently-tested function, `api/gates/registry.py`'s
+`resolve_with_remediation()`, used by both callers: it now tracks a
+`dispatchable` flag, and when the hop bound is hit unsettled, `dispatchable`
+is `False` and *nothing* dispatches — the case is recorded blocked, not
+routed to an unverified fallback. `tests/gates/test_registry.py`'s new
+`TestResolveWithRemediation` proves this with a synthetic `gate_fn` that
+never settles (real gates can't be forced to oscillate, since G2/G3 only
+gate charge actions and every remedy is a contact action — proven by trying,
+not assumed), asserting `dispatchable is False` directly.
+
+**G1 — the real remediation loop had zero test coverage through either real
+caller.** Every existing pipeline/scheduler test either executed directly or
+replanned directly; none hit a BLOCK with a remedy. Closed by the same
+extraction as G2/G3 (the shared function is directly unit-testable with fake
+gate outcomes) plus one new integration test,
+`tests/scheduler/test_runner.py`'s
+`test_blocked_job_remediates_and_dispatches_the_verified_remedy`, which
+fires a `RETRY_NOW` job with no pre-debit notice on record through the real
+`fire_due_jobs()` and asserts the remedy is re-gated and only then executed.
+
+**D2 — `gate_results` only recorded the first pass's verdicts, not the
+remedy hop's.** A Decision Tape needs to show *why* the original action was
+blocked and *why* the action that actually dispatched was found compliant —
+recording only the first eleven verdicts hid the second gate pass entirely.
+**Fixed**: `resolve_with_remediation()` accumulates every hop's verdicts;
+`decisions.gate_results` now has 22 entries on a one-hop remediation (11 +
+11), not 11.
+
+**D3 — `decisions._id` was never written into its own document body.**
+`decision_id` was generated and used to build the idempotency key but never
+included in `decision_doc` itself — recoverable via the collection's own
+`_id`, but the Decision Tape rendering it should not need a second lookup to
+show its own id. **Fixed**: `decision_doc["decision_id"]` is now set
+explicitly.
+
+**D4 — `build_gate_context()` had unsafe silent defaults for
+`amount_paise` and `kill_switch_engaged`.** Both were optional arguments
+that would silently pass `0`/`False` if a caller forgot to supply them —
+`amount_paise=0` always clears G3_AFA's threshold, `kill_switch_engaged=False`
+always clears G0_KILL. Exactly the shape of bug that shouldn't be possible
+by omission in the gate context builder. **Fixed**: both are now required,
+positional-or-keyword arguments with no default; `process_payment_failed()`
+resolves `dry_run`/`kill_switch_engaged` from `settings()` when the caller
+passes `None`, never from a hardcoded literal.
+
+**D5 — `PolicyContext.attempt_count` and `DiagnosisContext`'s history were
+wired to `case.salvage_attempt_count`, a field nothing increments.** This is
+the opposite of what "day 4: two open questions resolved" above claims was
+built from the start — it wasn't; the case document's counter is written
+once at creation and never updated, so every decision saw `attempt_count=0`
+regardless of real history, meaning G4_BUDGET/POL-009 could never actually
+fire on a real repeated case. **Fixed**: both now derive from real `audit`
+rows, filtered to Salvage's own `RETRY_NOW`/`RETRY_SCHEDULED` actions (new
+`_salvage_charge_attempts_in_window()` / `_prior_failure_classes()` helpers
+in `api/pipeline.py`) — the design the plan described, now actually wired
+that way rather than only intended that way. The "Two open questions"
+section above is accurate as of *this* fix, not as of first implementation;
+noted here so the record doesn't imply it was right the first time.
+
+**D6 — `g4_budget.py`'s docstring said "case-derived," describing the bug
+D5 fixed as the intended design.** Corrected to state plainly that the
+window is audit-derived, Salvage-only.
+
+**D1 — PRD §8.3.1 and SALVAGE_SPEC §5.6's idempotency-key pseudocode were
+stale after F2's fix**, still showing `f"{case.id}:{decision.id}:{action.id}"`
+— the exact formula F2 found structurally incapable of colliding. **Fixed**:
+both now show `f"{case_id}:{payment_key}:{action.id}"` with a paragraph
+explaining why `decision.id` had to come out.
+
+**D7/D8/D9 — three stale-documentation findings, all corrected:** D7,
+`.env.example` still described a working `POST /control/arm` route (mirrors
+F4's fix, which corrected README.md but missed this file). D8, README's
+status banner still said "day 3 complete" / "`make verify` fails" after day
+4 shipped 8/8. D9, `LIMITATIONS.md`'s Measurement section claimed a ±20%
+sensitivity analysis "is published" — it is not; `sim/` is scaffolding only
+as of day 4, the simulator is day 7/8 work. All three corrected in place.
+
+**D10 — this very entry's "Two open questions" section, as first drafted,
+implied G4_BUDGET was audit-derived by original design rather than fixed
+into that shape by D5.** Corrected above rather than left to read as a
+cleaner history than actually happened — per CLAUDE.md's own instruction
+that bugs found and fixed are demo material, not embarrassments to smooth
+over in the log that's supposed to be the honest record of them.
+
+**Five undocumented design decisions, now written into PRD.md §8.2/§9
+rather than living only in code and this log:** G1_WINDOW's contact-actions-
+only scope, G8_POSTDEBIT's reinterpretation (no A11 confirmation action
+exists in the catalog, so it gates the *next charge* on channel
+availability instead), G6_OPTOUT's carve-out for `CLOSE_NO_ACTION`/
+`SUPPRESS` (an opted-out case must still be closeable), `final.action`'s
+possible divergence from `policy.proposed_action` via remediation, and
+`MAX_REMEDIATION_HOPS = 3`'s existence and fail-closed behaviour on
+exhaustion.
+
+*Class:* two of spec-guardian's findings (G2, G3) are the same severity
+class as F1 — a real, if not-yet-reachable, full-chain-bypass shape — found
+by the second reviewer specifically because the first reviewer's fix
+introduced it. The rest are correctness gaps in what feeds the gates (D4,
+D5, D6) and documentation drift (D1, D7, D8, D9, D10, the five undocumented
+items). All fixed same session, per your no-iteration instruction. `make
+verify` reconfirmed 8/8 after every fix in this entry.

@@ -1,0 +1,549 @@
+# Failure taxonomy — Razorpay published reasons -> SPEC §4.1's 9 FailureClasses.
+#
+# Sourced live this session (2026-09-02), not from training data — SPEC §13
+# warns this list goes stale if hardcoded:
+#   - razorpay/docs/payments/payment-gateway/rainy-day/errors/error-reasons
+#     (the full `error.reason` enum, ~100 values, descriptions + next-steps)
+#   - razorpay/docs/errors/payments/list
+#     (the same values grouped by `source`: customer/business/gateway/razorpay)
+#   - razorpay/docs/errors/payments/cards
+#     (card-specific subset)
+#
+# LOOKUP: api.normalise.classifier.classify() walks `rules` in file order and
+# returns the first match. Rules are ordered most-specific to least-specific:
+#   1. `reason:` exact match — the common case when error_reason is populated.
+#   2. `description_contains:` — for the real, common case where reason/
+#      source/step are null and only code+description survive (NOTES.md day-1
+#      close, finding 1).
+#   3. `code:` alone — used ONLY for GATEWAY_ERROR/SERVER_ERROR, which SPEC
+#      §4.1 itself lists as CHANNEL_DOWNTIME examples regardless of reason.
+#      BAD_REQUEST_ERROR is deliberately never matched alone: real fixtures
+#      020/028/029 show it on both a real gateway decline and an unrelated
+#      test-tool artifact, so alone it carries no classification signal.
+# No match -> UNKNOWN. Never a guess (FR-04).
+#
+# Every rule below explains its own classification in `note` when the call is
+# not obvious from the class name alone. Two UNKNOWN sub-populations are
+# labelled explicitly rather than left as bare "unmapped" (see NOTES/PRD for
+# why this split matters for the honesty report):
+#   note: "business"        — describes a broken API call or merchant config,
+#                              not a customer's payment failing. None of the
+#                              other 8 classes claim to cover this.
+#   note: "domain-mismatch"  — a real Razorpay reason, but for a flow Salvage
+#                              never triggers: raw instrument re-entry (this
+#                              is a stored-mandate recurring debit, the token
+#                              is reused, never re-entered), Cardless EMI
+#                              (out of PRD §5 scope — card + UPI Autopay
+#                              mandates only), or a payout/refund reason.
+#   note: "ambiguous, low-volume, flagged not forced" — a genuine judgment
+#                              call I would not bet a compliance decision on;
+#                              conservative default is UNKNOWN rather than a
+#                              guess between two plausible classes.
+
+rules:
+  # ── TEMPORARY_LIQUIDITY — Yes, retryable, payday-aligned ───────────────────
+  - reason: insufficient_funds
+    class: TEMPORARY_LIQUIDITY
+    source: razorpay/docs/errors/payment-reasons
+    note: canonical example, SPEC §4.1
+
+  # ── ISSUER_HOLD — Yes, retry ~24h ───────────────────────────────────────────
+  - reason: bank_cutoff_in_progress
+    class: ISSUER_HOLD
+    source: razorpay/docs/errors/payment-reasons
+  - reason: collect_request_pending
+    class: ISSUER_HOLD
+    source: razorpay/docs/errors/payment-reasons
+    note: awaiting customer action on an outstanding UPI collect, resolves with time
+  - reason: deemed_transaction
+    class: ISSUER_HOLD
+    source: razorpay/docs/errors/payment-reasons
+    note: status unknown to acquirer until next day; closest fit is a temporary hold
+  - reason: payment_pending
+    class: ISSUER_HOLD
+    source: razorpay/docs/errors/payment-reasons
+    note: >
+      describes an in-flight, not-yet-failed state; if it is ever seen on a
+      payment.failed webhook that is itself a state-machine oddity worth a
+      NOTES.md entry, not just a classification
+  - reason: card_declined
+    class: ISSUER_HOLD
+    source: razorpay/docs/errors/payment-reasons
+    note: >
+      confirmed judgment call — generic decline, no further detail. Asymmetric
+      risk: wrongly retryable costs one wasted attempt; wrongly CREDENTIAL_DEAD
+      silently stops all retries on a recoverable case. See NOTES.md.
+  - reason: payment_declined
+    class: ISSUER_HOLD
+    source: razorpay/docs/errors/payment-reasons
+    note: same generic-decline reasoning as card_declined
+  - reason: debit_declined
+    class: ISSUER_HOLD
+    source: razorpay/docs/errors/payment-reasons
+    note: same generic-decline reasoning as card_declined
+  - reason: payment_risk_check_failed
+    class: ISSUER_HOLD
+    source: razorpay/docs/errors/payment-reasons
+    note: >
+      risk/fraud block, not a dead card — same asymmetric-risk default as the
+      generic declines above
+
+  # ── CHANNEL_DOWNTIME — Yes, retry within hours ──────────────────────────────
+  - reason: payment_failed
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+    fixture: ["029"]
+    note: >
+      confirmed judgment call — our one real decline capture (fixture 029,
+      source=gateway, step=payment_authorization). source:gateway is the
+      tiebreaker; SPEC §4.1 explicitly covers gateway-side failures under
+      CHANNEL_DOWNTIME.
+  - reason: bank_not_available
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+  - reason: bank_technical_error
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+  - reason: gateway_technical_error
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+  - reason: issuer_technical_error
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+  - reason: request_timed_out
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+  - reason: invalid_response_from_gateway
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+  - reason: server_error
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+  - reason: capture_failed
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+    note: authorized but gateway failed to capture — technical, transient
+  - reason: payment_declined_due_to_high_traffic
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+  - reason: duplicate_rrn_found
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+    note: rare system-level glitch, retry fixes it per Razorpay's own guidance
+  - reason: record_not_found
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+  - reason: verification_failed
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+    note: Razorpay's own description calls this "temporary"
+  - reason: psp_app_not_available
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+  - reason: psp_not_available
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+  - reason: upi_app_technical_error
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+
+  # ── AUTH_ABANDONED — Yes, re-auth link, not blind retry ─────────────────────
+  # In-domain line drawn at: repeating an auth STEP (OTP/PIN/timeout/cancel) is
+  # something the AFA re-auth link (A5) genuinely fixes. Re-entering a raw
+  # INSTRUMENT (card number, CVV, expiry, VPA) is not — see domain-mismatch
+  # notes further down, since a stored mandate never re-collects those.
+  - reason: authentication_failed
+    class: AUTH_ABANDONED
+    source: razorpay/docs/errors/payment-reasons
+  - reason: authorisation_declined_by_psp
+    class: AUTH_ABANDONED
+    source: razorpay/docs/errors/payment-reasons
+  - reason: incorrect_otp
+    class: AUTH_ABANDONED
+    source: razorpay/docs/errors/payment-reasons
+  - reason: otp_expired
+    class: AUTH_ABANDONED
+    source: razorpay/docs/errors/payment-reasons
+  - reason: otp_attempts_exceeded
+    class: AUTH_ABANDONED
+    source: razorpay/docs/errors/payment-reasons
+    note: repeated wrong-auth entry, not a velocity/amount limit -> AUTH_ABANDONED not LIMIT_EXCEEDED
+  - reason: incorrect_pin
+    class: AUTH_ABANDONED
+    source: razorpay/docs/errors/payment-reasons
+  - reason: pin_attempts_exceeded
+    class: AUTH_ABANDONED
+    source: razorpay/docs/errors/payment-reasons
+    note: same reasoning as otp_attempts_exceeded
+  - reason: payment_timed_out
+    class: AUTH_ABANDONED
+    source: razorpay/docs/errors/payment-reasons
+    note: canonical example, SPEC §4.1 ("payment timeout, 10 min limit")
+  - reason: payment_cancelled
+    class: AUTH_ABANDONED
+    source: razorpay/docs/errors/payment-reasons
+  - reason: payment_session_expired
+    class: AUTH_ABANDONED
+    source: razorpay/docs/errors/payment-reasons
+  - reason: payment_collect_request_expired
+    class: AUTH_ABANDONED
+    source: razorpay/docs/errors/payment-reasons
+    note: customer did not act on the UPI collect request in time
+
+  # ── LIMIT_EXCEEDED — Conditional, split/reschedule/AFA link ────────────────
+  - reason: transaction_limit_exceeded
+    class: LIMIT_EXCEEDED
+    source: razorpay/docs/errors/payment-reasons
+  - reason: transaction_daily_limit_exceeded
+    class: LIMIT_EXCEEDED
+    source: razorpay/docs/errors/payment-reasons
+  - reason: transaction_daily_count_exceeded
+    class: LIMIT_EXCEEDED
+    source: razorpay/docs/errors/payment-reasons
+  - reason: transaction_frequency_limit_exceeded
+    class: LIMIT_EXCEEDED
+    source: razorpay/docs/errors/payment-reasons
+
+  # ── CREDENTIAL_STALE — No blind retry; card update / re-auth link ──────────
+  - reason: card_expired
+    class: CREDENTIAL_STALE
+    source: razorpay/docs/errors/cards
+    note: canonical example, SPEC §4.1
+  - reason: card_not_enrolled
+    class: CREDENTIAL_STALE
+    source: razorpay/docs/errors/payment-reasons
+    note: "matches SPEC §4.1's own example wording: card not enabled for online"
+  - reason: debit_instrument_inactive
+    class: CREDENTIAL_STALE
+    source: razorpay/docs/errors/payment-reasons
+  - reason: card_disabled_for_online_payments
+    class: CREDENTIAL_STALE
+    source: razorpay/docs/errors/cards
+    note: same bucket as card_not_enrolled/debit_instrument_inactive
+  - reason: international_transaction_not_enabled
+    class: CREDENTIAL_STALE
+    source: razorpay/docs/errors/payment-reasons
+    note: >
+      corrected in spec-guardian review — a capability switch the customer
+      can turn back on (same shape as card_not_enrolled/
+      card_disabled_for_online_payments) is not a dead instrument. Originally
+      misfiled as CREDENTIAL_DEAD, which would have set stop_all_retries on a
+      recoverable case — exactly the asymmetric-risk mistake this file's own
+      card_declined note says to avoid. No retry either way; the fix is
+      which no-retry class, not whether to retry.
+
+  # ── CREDENTIAL_DEAD — No retry; STOP, dunning only ──────────────────────────
+  - reason: debit_instrument_blocked
+    class: CREDENTIAL_DEAD
+    source: razorpay/docs/errors/payment-reasons
+  - reason: bank_account_invalid
+    class: CREDENTIAL_DEAD
+    source: razorpay/docs/errors/payment-reasons
+    note: "explicitly includes closed accounts"
+  - reason: card_type_invalid
+    class: CREDENTIAL_DEAD
+    source: razorpay/docs/errors/payment-reasons
+    note: this method will never work here, not merely stale
+  - reason: transaction_on_vpa_restricted
+    class: CREDENTIAL_DEAD
+    source: razorpay/docs/errors/payment-reasons
+    note: this VPA is blocked; needs a different instrument, not a retry
+  - reason: vpa_resolution_failed
+    class: CREDENTIAL_DEAD
+    source: razorpay/docs/errors/payment-reasons
+    note: VPA does not resolve at NPCI level; permanent for this VPA
+
+  # ── MANDATE_INVALID — No retry; re-registration flow, needs AFA ────────────
+  - reason: mandate_creation_declined
+    class: MANDATE_INVALID
+    source: razorpay/docs/errors/payment-reasons
+    note: a failed mandate re-registration is still a mandate problem
+  - reason: mandate_creation_expired
+    class: MANDATE_INVALID
+    source: razorpay/docs/errors/payment-reasons
+  - reason: mandate_creation_failed
+    class: MANDATE_INVALID
+    source: razorpay/docs/errors/payment-reasons
+  - reason: mandate_creation_timeout
+    class: MANDATE_INVALID
+    source: razorpay/docs/errors/payment-reasons
+  - reason: reqauth_mandate_not_acknowledged
+    class: MANDATE_INVALID
+    source: razorpay/docs/errors/payment-reasons
+  - reason: credit_not_permitted
+    class: MANDATE_INVALID
+    source: razorpay/docs/errors/payment-reasons
+    note: >
+      TPV (third-party validation) mismatch is an identity/registration
+      problem on the beneficiary account, not a transient hold
+  - reason: credit_failed
+    class: MANDATE_INVALID
+    source: razorpay/docs/errors/payment-reasons
+    note: same TPV reasoning as credit_not_permitted
+
+  # ── UNKNOWN — business/integration errors, not a customer payment failure ──
+  - reason: amount_less_than_minimum_amount
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: invalid_currency
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: invalid_amount
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: order_amount_mismatch
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: invalid_order_id
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: merchant_not_activated
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: live_mode_not_enabled
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: compliance_violation
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: bank_not_enabled
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: card_network_not_enabled
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: payment_method_not_enabled
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: recurring_payment_not_enabled
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business — merchant's recurring-payments feature flag, not a customer decline
+  - reason: duplicate_request
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: duplicate_refund_id
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business — refunds are out of Salvage's scope entirely
+  - reason: refund_limit_crossed
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business — refunds are out of Salvage's scope entirely
+  - reason: order_already_paid
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: order_payment_method_mismatch
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: invalid_request
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: input_validation_failed
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: mismatch_in_transaction_details
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: beneficiary_account_does_not_exist
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business — payout-side reason, not a recurring-charge decline
+  - reason: beneficiary_account_dormant
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business — payout-side reason, not a recurring-charge decline
+  - reason: collect_on_mcc_blocked
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business — merchant MCC restriction
+  - reason: mcc_amount_limit_exceeded
+    class: UNKNOWN
+    source: razorpay/docs/errors/list
+    note: business — merchant MCC restriction
+  - reason: payment_pending_approval
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business — internal maker-checker approval flow, not customer-side
+  - reason: payment_amount_tampered
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business — security/integrity issue, not a retryable decline; UNKNOWN correctly routes it to human escalation
+  - reason: upi_collect_not_enabled
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+  - reason: upi_intent_not_enabled
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: business
+
+  # ── UNKNOWN — domain-mismatch: raw instrument re-entry, never happens on a
+  #             stored-mandate recurring debit (the token is reused, not
+  #             re-collected) ───────────────────────────────────────────────
+  - reason: card_number_invalid
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: >
+      domain-mismatch — deliberately overrides SPEC §4.1's own CREDENTIAL_DEAD
+      example list, which names "invalid card" verbatim. SPEC §4.1 is
+      reasoning about checkout-time card entry; on a stored-mandate recurring
+      debit there is no raw card number to be invalid, so this reason cannot
+      occur here in the first place, not merely a reason we chose not to
+      retry. Flagged explicitly (spec-guardian review) so a reader grepping
+      §4.1's examples against this file understands the gap on sight.
+  - reason: incorrect_card_details
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch
+  - reason: incorrect_card_expiry_date
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch
+  - reason: incorrect_cardholder_name
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch
+  - reason: incorrect_cvv
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch
+  - reason: invalid_vpa
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch
+  - reason: invalid_mobile_number
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch
+  - reason: mobile_number_invalid
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch
+  - reason: invalid_email
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — Salvage never collects email as part of a charge
+  - reason: invalid_device
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — device-binding setup, not a charge-time failure
+  - reason: invalid_user_details
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch
+  - reason: bank_account_validation_failed
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — bank-account re-entry, not a recurring-debit failure
+  - reason: incorrect_atm_pin
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — UPI registration step, not a charge-time failure
+  - reason: pin_not_set
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: >
+      domain-mismatch — requires an out-of-band UPI-app action our action
+      catalog (a payment link) cannot resolve
+  - reason: psp_not_registered
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — device/PSP setup issue
+  - reason: user_not_registered_for_netbanking
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — netbanking registration, not card/UPI Autopay
+
+  # ── UNKNOWN — Cardless EMI, out of PRD §5 scope (card + UPI Autopay only) ──
+  - reason: credit_limit_exceeded
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — Cardless EMI, out of PRD §5 scope
+  - reason: credit_limit_expired
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — Cardless EMI, out of PRD §5 scope
+  - reason: credit_limit_inactive
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — Cardless EMI, out of PRD §5 scope
+  - reason: credit_limit_not_approved
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — Cardless EMI, out of PRD §5 scope
+  - reason: emi_greater_than_max_amount
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — Cardless EMI, out of PRD §5 scope
+  - reason: emi_plan_unavailable
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — Cardless EMI, out of PRD §5 scope
+  - reason: user_not_eligible
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — Cardless EMI, out of PRD §5 scope
+  - reason: funds_blocked_by_mandate
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: domain-mismatch — One Time Mandate product, not a recurring mandate
+
+  # ── UNKNOWN — ambiguous, low-volume, flagged rather than forced ────────────
+  - reason: upi_autopay_not_supported_on_psp
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: >
+      ambiguous, low-volume, flagged not forced — practically permanent for
+      this PSP/method combo (closer to CREDENTIAL_DEAD in effect), but it is
+      a capability mismatch, not a dead card, and doesn't fit SPEC §4.1's
+      card-specific CREDENTIAL_DEAD examples cleanly. See NOTES.md's Phase 3 entry.
+  - reason: psp_app_not_supported
+    class: UNKNOWN
+    source: razorpay/docs/errors/payment-reasons
+    note: >
+      ambiguous, low-volume, flagged not forced — "blacklisted app" reads as
+      permanent for that PSP, but the next-step text ("choose a different PSP
+      app") reads like a retry instruction. Conservative default: UNKNOWN
+      rather than guess between CHANNEL_DOWNTIME and CREDENTIAL_DEAD.
+
+  # ── Description-only fallback (reason/source/step null) ─────────────────────
+  - description_contains: "Mandate debit not as per frequency"
+    class: UNKNOWN
+    source: "fixture:020,028"
+    note: >
+      Dashboard forced-charge test-tool artifact, not a real customer
+      decline — it fires when a charge is attempted before the invoice's
+      natural due date. Confirmed non-generalizable, NOTES.md day-1 close.
+      Kept here so the normaliser classifies it deliberately instead of
+      falling through by accident, and so the coverage report can name it
+      honestly rather than count it as a real classified reason.
+
+  # ── code-only fallback — SPEC §4.1 lists these two codes directly under
+  #    CHANNEL_DOWNTIME regardless of reason. BAD_REQUEST_ERROR is
+  #    deliberately absent: it carries no signal alone (see header). ─────────
+  - code: GATEWAY_ERROR
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+    note: "SPEC §4.1 lists GATEWAY_ERROR as a CHANNEL_DOWNTIME example directly"
+  - code: SERVER_ERROR
+    class: CHANNEL_DOWNTIME
+    source: razorpay/docs/errors/payment-reasons
+    note: Razorpay's own server-side technical error

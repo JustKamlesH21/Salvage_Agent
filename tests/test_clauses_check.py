@@ -1,15 +1,14 @@
-"""The clause checker must fail loudly while the gates are unwritten.
-
-Today it reports eleven missing gates and an empty rulebook. That is the
-correct answer on day 0 and it must stay the correct answer — a checker that
-passes vacuously would let day 5 ship a gate with no clause reference.
+"""The clause checker: was designed to fail loudly while the gates were
+unwritten (day 0 through day 3), and now that all eleven gates and the
+policy rules exist (day 4, PRD §11), `TestCurrentState` asserts it actually
+passes — the same "this test turns green when the real thing lands" pattern
+as tests/test_coverage_floor.py.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from scripts import check_clauses as cc
 
 
@@ -41,10 +40,5 @@ class TestRuleFields:
 
 
 class TestCurrentState:
-    @pytest.mark.xfail(
-        reason="Gates G0-G10 land on day 5 and policy rules on day 4 (PRD §11). "
-        "This turns green then, and is the signal that they did.",
-        strict=True,
-    )
     def test_clause_check_passes(self) -> None:
         assert cc.main() == 0
