@@ -68,7 +68,20 @@ async def execute_action(
     kill_switch_engaged: bool,
     actor: str = "system",
     run_id: Any = None,
+    now_utc: dt.datetime | None = None,
 ) -> ActionResult:
+    """`now_utc` is the clock the caller's gates reasoned with. It defaults to
+    the wall clock, which is correct for live traffic where the two are the
+    same instant — but it must be passable, because the gate chain re-derives
+    its entire context (G4_BUDGET's 14-day window, G5_COOLDOWN's 48 hours,
+    G2_PREDEBIT's 24-hour notice lead) from the `ts` values these audit rows
+    carry. A caller that evaluates gates at one time and writes audit rows
+    stamped at another is describing a case history that never happened. The
+    batch harness (day 5) drives cases on a simulated clock and hits this
+    directly: wall-clock stamps would make every prior attempt look ancient,
+    so budgets and cooldowns would never fire and arm B would be credited
+    with attempts compliance would actually have refused.
+    """
     # Bounded set (SPEC §5.6's own pseudocode uses `assert`; an explicit
     # check is used here instead because `assert` is stripped under
     # `python -O`, which would silently remove the one line standing between
@@ -82,13 +95,12 @@ async def execute_action(
     if not dry_run and not is_armed():
         return ActionResult(outcome="blocked_not_armed", idempotency_key=idempotency_key)
 
-    def _utcnow() -> dt.datetime:
-        return dt.datetime.now(dt.UTC)
+    stamped_at = now_utc or dt.datetime.now(dt.UTC)
 
     pre_document = {
         "case_id": case_id,
         "decision_id": decision_id,
-        "ts": _utcnow(),
+        "ts": stamped_at,
         "actor": actor,
         "phase": "pre",
         "action": action.value,
@@ -123,7 +135,7 @@ async def execute_action(
     post_document = {
         "case_id": case_id,
         "decision_id": decision_id,
-        "ts": _utcnow(),
+        "ts": stamped_at,
         "actor": actor,
         "phase": "post",
         "action": action.value,

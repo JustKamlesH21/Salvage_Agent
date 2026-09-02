@@ -1,0 +1,162 @@
+# Outcome simulator calibration — SPEC §5.9, PRD §6 FR-12.
+#
+# Every parameter carries a `source:` of exactly one of:
+#   measured — observed in this project's own Razorpay test-mode traffic
+#   cited    — taken from, or arithmetically derived from, a named external source
+#   assumed  — reasoned, not sourced; the honest label for a number we chose
+#
+# There are ZERO `measured` values in this file, and that is the single most
+# important thing about it. Day 1 established why: Razorpay's documented test
+# decline reasons did not reproduce in this account (1 of 110 published reasons
+# has a real fixture behind it), and a mandate-authentication rejection above
+# the test-mode amount ceiling fires no webhook at all. Nothing in test mode
+# produces a realistic decline distribution, which is exactly why SPEC §5.9
+# specifies a simulator for the batch instead of pretending test mode is a
+# population. See LIMITATIONS.md's Measurement section.
+#
+# Base rates are PER CHARGE ATTEMPT. Published industry figures are almost
+# always CUMULATIVE over a whole dunning campaign. Where a per-attempt number
+# is derived from a cumulative one, the arithmetic is shown in sim/CALIBRATION.md
+# rather than left implicit — a per-attempt rate quietly compared against a
+# cumulative benchmark is how a simulator flatters itself.
+
+version: 1
+
+# ── Base recovery probability, per charge attempt, by failure class ──────────
+base_rates:
+  TEMPORARY_LIQUIDITY:
+    value: 0.35
+    source: cited
+    ref: "Slicker (2026), Recurly, Paddle — soft declines recover 45–70% cumulatively with well-timed retries; 0.35/attempt compounds to ~72% over 3 attempts"
+    note: >-
+      The most common failure and the one Salvage's timing lever is aimed at.
+      Deliberately set at the LOW end of what the cumulative band implies:
+      overstating this class inflates arm B, which is the arm we are arguing for.
+
+  ISSUER_HOLD:
+    value: 0.22
+    source: cited
+    ref: "Beast Insights / Slicker (2026) — do_not_honor (Visa 05) is retryable once after ~24h, then behaves like a permanent block"
+    note: >-
+      Retryable but not persistently so, which is why the attempt decay below
+      matters more for this class than for any other.
+
+  CHANNEL_DOWNTIME:
+    value: 0.78
+    source: assumed
+    ref: "Reasoned from Razorpay Optimizer's own documented ~20-minute SR-triggered gateway downtime windows"
+    note: >-
+      A transient gateway or network fault, not a statement about the customer's
+      money. Once the window passes, the same charge usually works. High, and
+      the class is only 10% of the cohort, so it cannot carry the headline.
+
+  AUTH_ABANDONED:
+    value: 0.15
+    source: assumed
+    note: >-
+      The customer started an authentication and did not finish it. A silent
+      retry does not address that — a nudge or a fresh link does. Low on purpose:
+      if Salvage recovers this class it should be via the contact path, and the
+      number should not reward it for blind retrying instead.
+
+  LIMIT_EXCEEDED:
+    value: 0.30
+    source: assumed
+    note: >-
+      Per-transaction or velocity ceiling. Time (a new day, a new cycle) is the
+      thing that clears it, which makes it genuinely retryable but timing-sensitive.
+      SPEC §4.1 marks this class "Conditional" in its own Retryable column.
+
+  UNKNOWN:
+    value: 0.10
+    source: assumed
+    note: >-
+      Never sampled in arms B or C — POL-002 routes UNKNOWN to ESCALATE_HUMAN
+      before any charge is proposed. Used only by arm A, which does not diagnose
+      and therefore blind-retries these like everything else. Conservative.
+
+  # The three below can never recover on a retry — see the hard_decline_retry
+  # modifier, which forces them to zero regardless of what is written here.
+  # They are listed with an explicit 0.0 rather than omitted so that no class
+  # is silently missing from this table.
+  CREDENTIAL_STALE:
+    value: 0.0
+    source: cited
+    ref: "SALVAGE_SPEC.md §5.9 modifier table; Slicker (2026) — an expired credential is refreshed via Card Account Updater or a reauth link, not by re-presenting the same stale credential"
+  CREDENTIAL_DEAD:
+    value: 0.0
+    source: cited
+    ref: "Slicker (2026) — expired_card, lost_card and persistent do_not_honor recover near 0%"
+  MANDATE_INVALID:
+    value: 0.0
+    source: cited
+    ref: "RBI Digital Payments E-mandate Framework 2026 — a debit without a valid mandate is not permissible; recovery requires re-registration with AFA, not a retry"
+
+# ── Multiplicative modifiers — SPEC §5.9's table ─────────────────────────────
+# All day-of-month and hour tests are evaluated in IST, never in the server's
+# UTC. Payday and "night" are facts about the customer's local life, not about
+# where the process happens to run. CLAUDE.md: most timezone bugs in this
+# codebase will be here.
+modifiers:
+  payday_window:
+    value: 1.0
+    days_of_month: [1, 2, 3, 15, 16]
+    source: cited
+    ref: "SALVAGE_SPEC.md §5.9 — balances highest at month-start and mid-month"
+    note: "The reference case, not a bonus: 1.0 means 'no penalty', and nothing in this model rewards a payday hit."
+
+  pre_payday:
+    value: 0.72
+    days_of_month: [26, 27, 28, 29, 30, 31]
+    source: cited
+    ref: "SALVAGE_SPEC.md §5.9 — refusal rates peak just before payday"
+
+  night:
+    value: 0.98
+    from_hour_ist: 19
+    to_hour_ist: 8
+    source: cited
+    ref: "SALVAGE_SPEC.md §5.9 — ~2% lower success at night"
+    note: >-
+      Small by design. This is NOT the compliance window — G1_WINDOW blocks
+      customer contact outside 08:00–19:00 IST as a rule, and no probability
+      here softens that. This modifier only says a silent auto-debit does
+      marginally worse overnight.
+
+  weekend:
+    value: 0.94
+    source: cited
+    ref: "SALVAGE_SPEC.md §5.9 — lower retry success at weekends"
+
+  hard_decline_retry:
+    value: 0.0
+    applies_to: [CREDENTIAL_STALE, CREDENTIAL_DEAD, MANDATE_INVALID]
+    source: cited
+    ref: "SALVAGE_SPEC.md §5.9 — hard declines never recover on retry"
+    note: >-
+      SPEC names CREDENTIAL_STALE and CREDENTIAL_DEAD. MANDATE_INVALID is added
+      here with stated reasoning rather than silently: a charge against a mandate
+      the framework does not recognise cannot succeed regardless of timing, and
+      POL-010 already routes that class to an AFA link rather than a retry.
+
+  attempt_decay:
+    value: 0.85
+    applies_from_attempt: 3
+    source: cited
+    ref: "SALVAGE_SPEC.md §5.9 — diminishing returns, attempt 3+ same class"
+    note: >-
+      Compounding: attempt 3 gets 0.85, attempt 4 gets 0.85^2, and so on.
+      Attempts 1 and 2 are undecayed.
+
+# ── Baseline (arm A) behaviour — Razorpay's documented default ───────────────
+baseline:
+  retry_offsets_days: [1, 2, 3]
+  source: cited
+  ref: "Razorpay subscription docs — auto-retries fire T+1, T+2, T+3, then the subscription halts"
+  note: >-
+    DOC-DERIVED, NOT OBSERVED. Day 1 could not reproduce the retry ladder in
+    test mode: the only reachable failure mechanism produces a validation
+    artifact rather than a decline, and the shortest test-mode billing cycle
+    (7 days) outlives the card token (3 days). LIMITATIONS.md says this
+    wherever arm A's number appears, and so does the README. A doc-derived
+    baseline is weaker evidence than a measured one.

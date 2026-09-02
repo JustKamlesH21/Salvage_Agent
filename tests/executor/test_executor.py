@@ -254,3 +254,64 @@ class TestArming:
             assert is_armed() is False
         finally:
             settings.cache_clear()
+
+
+class TestAuditRowsCarryTheDecisionsClock:
+    """The gate chain re-derives its whole context — G4_BUDGET's 14-day
+    window, G5_COOLDOWN's 48 hours, G2_PREDEBIT's 24-hour notice lead — from
+    the `ts` on these rows. If the executor stamps them with the wall clock
+    while the gates reasoned about some other instant, the case history the
+    next decision cycle reads is one that never happened.
+
+    Found on day 5 while building the batch harness, which drives cases on a
+    simulated clock: wall-clock stamps made every prior attempt look ancient,
+    so budgets and cooldowns never fired and arm B was being credited with
+    attempts compliance would have refused.
+    """
+
+    async def test_both_rows_are_stamped_with_the_supplied_clock(self, repos) -> None:  # type: ignore[no-untyped-def]
+        decided_at = dt.datetime(2026, 9, 15, 4, 30, tzinfo=dt.UTC)
+
+        await execute_action(
+            case_id="case1",
+            decision_id="dec1",
+            action=Action.NUDGE,
+            payload={},
+            idempotency_key="case1:pay1:NUDGE",
+            dry_run=True,
+            audit=repos.audit,
+            kill_switch_engaged=False,
+            now_utc=decided_at,
+        )
+
+        rows = await repos.audit.by_case("case1")
+        assert len(rows) == 2
+        for row in rows:
+            stamped = row["ts"]
+            stamped = stamped if stamped.tzinfo else stamped.replace(tzinfo=dt.UTC)
+            assert stamped == decided_at
+
+    async def test_omitting_the_clock_still_stamps_wall_time(self, repos) -> None:  # type: ignore[no-untyped-def]
+        # Live traffic passes nothing and must keep working exactly as before.
+        before = dt.datetime.now(dt.UTC)
+        await execute_action(
+            case_id="case2",
+            decision_id="dec2",
+            action=Action.NUDGE,
+            payload={},
+            idempotency_key="case2:pay2:NUDGE",
+            dry_run=True,
+            audit=repos.audit,
+            kill_switch_engaged=False,
+        )
+        after = dt.datetime.now(dt.UTC)
+
+        rows = await repos.audit.by_case("case2")
+        stamped = rows[0]["ts"]
+        stamped = stamped if stamped.tzinfo else stamped.replace(tzinfo=dt.UTC)
+        # BSON stores milliseconds, so a stamp taken microseconds after
+        # `before` can round-trip to just below it — the same truncation
+        # day 2's hash-chain entry in NOTES.md already logged. One
+        # millisecond of slack on each end, not a loosened assertion.
+        assert before - dt.timedelta(milliseconds=1) <= stamped
+        assert stamped <= after + dt.timedelta(milliseconds=1)

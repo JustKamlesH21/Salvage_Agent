@@ -1,0 +1,36 @@
+# Cost model for net recovery — SPEC §5.10.
+#
+# Reporting NET rather than gross is the point: a recovery strategy that
+# spends ₹40 of human escalation and six WhatsApp messages to collect ₹199 has
+# not recovered anything. Every figure below is an assumption unless marked
+# otherwise, and they are all listed so the arithmetic can be argued with.
+
+version: 1
+
+gateway_fee_rate_on_success: 0.02 # ~2% MDR, charged only when money actually moves
+gateway_fee_source: cited # Razorpay's published standard pricing band for domestic cards
+
+# A failed attempt costs nothing directly. It is not free — repeated failures
+# convert soft declines into hard ones and cost issuer goodwill — but that
+# cost is not a rupee figure we can source, so it is left at zero rather than
+# invented. G4_BUDGET is the control that stands in for it.
+failed_attempt_paise: 0
+failed_attempt_source: assumed
+
+# Contact channel costs, in paise.
+channels:
+  sms_paise: 15 # ₹0.15
+  whatsapp_paise: 35 # ₹0.35
+  email_paise: 1 # ₹0.01
+channels_source: assumed # Indian bulk-messaging market rates, order-of-magnitude
+
+human_escalation_paise: 4000 # ₹40
+human_escalation_source: assumed # ~10 minutes of a support agent's time
+
+# Which channel each action bills against.
+action_channel:
+  SEND_PRE_DEBIT_NOTICE: sms # a regulatory notice, sent where it will be seen
+  CREATE_REAUTH_LINK: sms
+  CREATE_AFA_LINK: sms
+  NUDGE: whatsapp
+  BASELINE_DUNNING_EMAIL: email

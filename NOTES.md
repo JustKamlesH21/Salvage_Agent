@@ -1509,3 +1509,96 @@ introduced it. The rest are correctness gaps in what feeds the gates (D4,
 D5, D6) and documentation drift (D1, D7, D8, D9, D10, the five undocumented
 items). All fixed same session, per your no-iteration instruction. `make
 verify` reconfirmed 8/8 after every fix in this entry.
+
+---
+
+### 2026-09-04 — day 5: simulator, batch, frontend, ship. The eval found two real bugs, and the headline number is not the one we wanted **demo**
+
+Built `sim/` (calibrated simulator, sourced calibration, ±20% sensitivity),
+`eval/` (cohort, cost model, A/B/C harness), the read API the frontend needs,
+and both screens (`web/`). `make verify` 8/8, 495 tests.
+
+**The batch does not show Salvage recovering more money than the baseline,
+and the README says so in its own Results section rather than burying it.**
+Mean net recovery: baseline 35.4%, Salvage 34.8%. The ±20% sensitivity sweep
+that FR-12 requires **flips the ranking** — baseline leads at ×0.8, Salvage
+leads at ×1.2. The honest reading is that the recovery comparison sits inside
+the noise of a calibration we wrote ourselves, so no recovery uplift is
+claimed anywhere.
+
+What does hold, across every seed, independent of the calibration:
+
+| | baseline | Salvage |
+|---|---|---|
+| attempts per recovery | 4.09–5.30 | 2.89–3.39 |
+| wasted attempts on hard declines | 30 per run | **0** |
+| contacts outside 08:00–19:00 IST | 22 | **0** |
+| spread across seeds | 20.9–46.1% | 30.9–40.9% |
+
+Those are the only comparative claims made. The compliance row is audited by
+the harness from the record of *what was dispatched and when*, without reading
+a single gate verdict — a gate bug shows up as a non-zero count instead of
+being invisible because the gate that was wrong also reported it was fine.
+
+**Bug 1, and it is the significant one: the product's headline lever was
+never implemented.** Policy rules have carried `timing: NEXT_PAYDAY_WINDOW`
+and `timing: HOURS_24` since day 3. `PolicyDecision` carried them into the
+pipeline. The pipeline dropped them on the floor. Every `RETRY_SCHEDULED`
+fired the instant the gates allowed it — which is the baseline's timing
+wearing Salvage's name. CLAUDE.md names this exact lever ("do not accidentally
+design it away") and it had been, silently, for two days, with `make verify`
+green the whole time because nothing tested that a timing intent became a
+time.
+
+*How found:* not by review. By arm A beating arm B in the first real batch
+run and refusing to accept the number without understanding it. Three
+reviewers and a full gate suite had not caught it; a measurement did. Fixed in
+`api/policy/timing.py` — and deliberately built as *policy*, not a twelfth
+gate: gates decide what is permitted, this decides when a permitted thing is
+worth doing. It can only push an action later, never earlier, and whatever it
+schedules is re-gated in full when it fires.
+
+The anchoring subtlety is worth keeping. A target computed as "now + 24h" is
+recomputed every decision cycle, so it walks forward forever and the charge
+never happens — while every individual cycle looks perfectly reasonable.
+Targets are anchored to the case's own history instead.
+`test_a_scheduled_retry_terminates_instead_of_walking_forward` is the test
+that would catch a regression.
+
+**Bug 2: the executor stamped audit rows with the wall clock while the gates
+reasoned about a different instant.** The gate chain re-derives its entire
+context — G4_BUDGET's 14-day window, G5_COOLDOWN's 48 hours, G2_PREDEBIT's
+24-hour notice lead — from the `ts` on those rows. Under the harness's
+simulated clock the two diverged, and always in the direction that flatters
+Salvage: every prior attempt looked ancient, so budgets and cooldowns never
+fired and arm B was being credited with attempts compliance would have
+refused. Invisible in production, where the two clocks are the same instant.
+`execute_action()` and the block-row writer now take the decision's clock.
+
+*Class:* both are the same shape as the five entries already in this log —
+the checking machinery agreed with the code because it shared the code's
+assumption. The eval is the first thing in this project that did not.
+
+**Two gaps closed that were logged rather than fixed on day 4:** ingest and
+the pipeline were never wired together (a real webhook produced an event row
+and nothing else — no case, no decision, no audit), and the kill switch was
+configuration-only, so a runtime `POST /control/kill` would have changed what
+the status bar said without changing what the system did. Both now tested;
+the kill-switch test asserts G0_KILL actually blocks, not that the endpoint
+returns the right JSON.
+
+**Arm C's finding, reported as measured per SPEC §5.10:** the LLM drove **2
+of ~207 decisions** across arm B, and arm B matched arm C on every metric in
+every seed, at roughly 40× the decision latency (p50 279ms against 6ms).
+Invariant 2 is exactly why — the deterministic normaliser wins whenever it is
+not `UNKNOWN`, which is almost always, and the cohort's `UNKNOWN` slice is
+genuinely outside Salvage's domain. The model is not carrying this product.
+That is a finding, not an embarrassment, and it ships.
+
+**One thing the cohort taught us before it taught us anything else:** the
+first batch reported Salvage recovering 0.0%. Not a bug — G8_POSTDEBIT was
+correctly blocking every charge because the synthetic customers had no contact
+channel on record, and a mandate customer without a contact cannot be sent the
+post-debit confirmation RBI requires. The cohort was wrong, the gate was
+right. `SyntheticCase.customer_document()` carries the reasoning so nobody
+deletes it later to make a number move.

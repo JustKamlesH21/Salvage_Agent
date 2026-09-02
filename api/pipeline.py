@@ -15,6 +15,7 @@ webhook types. Case creation is minimal: find-or-create, seed zeros.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import uuid
 from typing import Any
@@ -23,12 +24,18 @@ from api.config import settings
 from api.db.repositories import Repositories
 from api.diagnose import DiagnosisContext, diagnose
 from api.executor import execute_action
+
+# Direct name import, not `from api.executor import killswitch`: the package's
+# __init__ re-exports names that shadow same-named submodules as package
+# attributes — the trap day 4 hit with `arm` (see executor.py's note).
+from api.executor.killswitch import engaged as killswitch_engaged
 from api.gates.registry import ChainResult, evaluate_chain, resolve_with_remediation
 from api.gates.types import CHARGE_ACTIONS, CONTACT_ACTIONS, GateContext, VerdictKind
 from api.normalise import classify_payload
 from api.normalise.types import FailureClass
 from api.policy import RULES as POLICY_RULES
 from api.policy import PolicyContext, evaluate
+from api.policy.timing import earliest_attempt_at
 from api.policy.types import Action
 
 SALVAGE_ATTEMPT_WINDOW = dt.timedelta(days=14)
@@ -53,11 +60,25 @@ def _as_utc(value: dt.datetime) -> dt.datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=dt.UTC)
 
 
+def _case_opened_at(case: dict[str, Any], fallback: dt.datetime) -> dt.datetime:
+    """When this case's trouble started — the anchor a scheduled retry is
+    measured from. Falls back to `fallback` for a case document written
+    before `opened_at` was stored, rather than silently anchoring on the
+    wall clock.
+    """
+    opened = case.get("opened_at")
+    return _as_utc(opened) if isinstance(opened, dt.datetime) else fallback
+
+
 async def find_or_create_case(
-    payment_entity: dict[str, Any], repos: Repositories
+    payment_entity: dict[str, Any],
+    repos: Repositories,
+    *,
+    run_id: Any = None,
+    now_utc: dt.datetime | None = None,
 ) -> dict[str, Any]:
     """Keyed on the first of `subscription_id`, `invoice_id`, `order_id`,
-    `id` (the payment id) that's actually present.
+    `id` (the payment id) that's actually present, scoped to `run_id`.
 
     Real `payment.failed` captures in this account carry `invoice_id` but not
     `subscription_id` directly on `payload.payment.entity` (NOTES.md's Phase
@@ -66,6 +87,13 @@ async def find_or_create_case(
     two-field fallback silently fails to dedupe that exact case and opens a
     new one every time; found by the pipeline's own duplicate-webhook test,
     not by inspection.
+
+    `run_id` scopes the lookup as well as the stored document: a case belongs
+    to exactly one partition (live is `None`, each eval batch its own), and an
+    unscoped lookup would let a synthetic batch case adopt a live case's
+    identifiers, or vice versa. PRD §8.2's `cases` shape has carried `run_id`
+    since day 0; nothing set it until the day-5 eval harness needed real run
+    isolation.
     """
     candidates = {
         "subscription_id": payment_entity.get("subscription_id"),
@@ -76,13 +104,14 @@ async def find_or_create_case(
     for field, value in candidates.items():
         if not value:
             continue
-        existing = await repos.cases.find({field: value}, limit=1)
+        existing = await repos.cases.find({field: value, "run_id": run_id}, limit=1)
         if existing:
             return existing[0]
 
     method = payment_entity.get("method", "card")
     doc: dict[str, Any] = {
         **candidates,
+        "run_id": run_id,
         "customer_id": payment_entity.get("customer_id"),
         "amount_paise": int(payment_entity.get("amount") or 0),
         "currency": payment_entity.get("currency", "INR"),
@@ -91,7 +120,10 @@ async def find_or_create_case(
         # Razorpay's own subscription lifecycle state — distinct from `state`
         "subscription_status": "active",
         "state": "open",  # Salvage's own case lifecycle (PRD §8.2)
-        "opened_at": _utcnow(),
+        # The decision's clock, not the wall clock: this is the anchor
+        # api.policy.timing measures a scheduled retry from, and the batch
+        # harness drives cases on a simulated clock.
+        "opened_at": now_utc or _utcnow(),
         "closed_at": None,
         "outcome": None,
         "recovered_paise": 0,
@@ -288,10 +320,17 @@ async def _write_block_audit_rows(
     proposed_action: Action,
     repos: Repositories,
     dry_run: bool,
+    now_utc: dt.datetime,
+    run_id: Any = None,
 ) -> None:
     """SPEC §5.5: "Every BLOCK writes an audit document with the clause
     reference." One row per blocking gate, phase="block" — distinct from the
     executor's own pre/post rows for whatever final action actually dispatches.
+
+    `now_utc` is the decision's own clock, not the wall clock, for the reason
+    execute_action()'s docstring gives: the gate chain re-derives its context
+    from these timestamps, so they have to agree with the time the gates were
+    evaluated at.
     """
     for verdict in chain_blocking:
         key = f"{case_id}:{decision_id}:{proposed_action.value}:BLOCK:{verdict.gate}"
@@ -299,7 +338,7 @@ async def _write_block_audit_rows(
             {
                 "case_id": case_id,
                 "decision_id": decision_id,
-                "ts": _utcnow(),
+                "ts": now_utc,
                 "actor": "system",
                 "phase": "block",
                 "action": proposed_action.value,
@@ -309,7 +348,8 @@ async def _write_block_audit_rows(
                 "dry_run": dry_run,
                 "clause_ref": verdict.clause_ref,
                 "note": verdict.detail,
-            }
+            },
+            run_id=run_id,
         )
 
 
@@ -321,25 +361,37 @@ async def process_payment_failed(
     dry_run: bool | None = None,
     kill_switch_engaged: bool | None = None,
     disable_llm: bool | None = None,
+    run_id: Any = None,
 ) -> dict[str, Any]:
     """`dry_run` and `kill_switch_engaged` default from `settings()` when not
     passed explicitly — never a bare `False`/`True` literal default. A safety
     flag whose default silently means "never engaged" is a bypass by omission
-    the moment a future caller (the live webhook route, not built yet) forgets
-    to plumb it through; reading `settings()` here means there is no such
-    omission to make. Same pattern api.diagnose.client.diagnose() already
-    uses for `disable_llm` (Day 3).
+    the moment a future caller (the live webhook route) forgets to plumb it
+    through; reading `settings()` here means there is no such omission to
+    make. Same pattern api.diagnose.client.diagnose() already uses for
+    `disable_llm` (Day 3).
+
+    `run_id` partitions everything this call writes — the case, the decision,
+    and every audit row (the audit chain is partitioned per run by design,
+    api/db/repositories.py). `None` is the live partition. Before day 5 this
+    was hardcoded `None` on the decision document and simply never passed to
+    `execute_action()` or the block rows, so an eval batch would have written
+    its synthetic rows into the live demo's hash chain.
     """
     cfg = settings()
     if dry_run is None:
         dry_run = cfg.dry_run
     if kill_switch_engaged is None:
-        kill_switch_engaged = cfg.kill_switch
+        # The runtime switch, not only the configured one — POST /control/kill
+        # engages it after startup, and reading `cfg.kill_switch` here would
+        # mean a kill switch that changes what the UI says and nothing about
+        # what the system does (FR-10: engaging it freezes pending actions).
+        kill_switch_engaged = killswitch_engaged()
 
     now_utc = now_utc or _utcnow()
     payment_entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
 
-    case = await find_or_create_case(payment_entity, repos)
+    case = await find_or_create_case(payment_entity, repos, run_id=run_id, now_utc=now_utc)
 
     # Real, audit-derived attempt history — not the case document's
     # never-incremented `salvage_attempt_count` (spec-guardian D5). Feeds
@@ -410,6 +462,8 @@ async def process_payment_failed(
             proposed_action=proposed_for_this_hop,
             repos=repos,
             dry_run=dry_run,
+            now_utc=now_utc,
+            run_id=run_id,
         )
 
     # First pass, then every remediation hop re-gated before it can dispatch
@@ -426,6 +480,31 @@ async def process_payment_failed(
     dispatchable = remediation.dispatchable
     accumulated_verdicts = list(remediation.verdicts)
 
+    # A charge the gates permit still has a *right time*, and until day 5
+    # nothing applied one: policy rules carried `timing: NEXT_PAYDAY_WINDOW`
+    # and `HOURS_24` from day 3 and the pipeline ignored them, so every
+    # RETRY_SCHEDULED fired the instant it was allowed. That is the baseline's
+    # timing, not Salvage's, and CLAUDE.md names this lever as the one not to
+    # design away. The day-5 batch is what found it — arm A was beating arm B.
+    #
+    # This only ever delays, and what it delays is re-gated in full when it
+    # fires. It cannot permit anything the chain refused.
+    if dispatchable and final.verdict == VerdictKind.ALLOW and final.action in CHARGE_ACTIONS:
+        anchor = (
+            max(charge_attempt_timestamps)
+            if charge_attempt_timestamps
+            else _case_opened_at(case, now_utc)
+        )
+        earliest = earliest_attempt_at(
+            timing=policy_decision.timing,
+            timing_hint=diagnosis.timing_hint,
+            anchor=anchor,
+            now_utc=now_utc,
+            max_delay_minutes=policy_decision.max_delay_minutes,
+        )
+        if earliest > now_utc:
+            final = dataclasses.replace(final, verdict=VerdictKind.REPLAN, at=earliest)
+
     decision_doc: dict[str, Any] = {
         # Also written to every audit row for this decision cycle (pre/post/
         # block phases alike) — the join key a Decision Tape renderer needs.
@@ -435,7 +514,7 @@ async def process_payment_failed(
         # claiming otherwise.
         "decision_id": decision_id,
         "case_id": case["_id"],
-        "run_id": None,
+        "run_id": run_id,
         "created_at": now_utc,
         "diagnosis": {
             "failure_class": diagnosis.failure_class.value,
@@ -493,6 +572,8 @@ async def process_payment_failed(
             dry_run=dry_run,
             audit=repos.audit,
             kill_switch_engaged=kill_switch_engaged,
+            run_id=run_id,
+            now_utc=now_utc,
         )
 
     # `execute_result` is attached to the returned dict for the caller's

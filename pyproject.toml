@@ -51,6 +51,16 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S105", "S106"]
 "scripts/*" = ["S603", "S607"]
+# S311 flags `random` as unsuitable for cryptography, which is true and not
+# what it is doing here. The simulator and the batch harness need a *seeded,
+# reproducible* PRNG — that is the entire basis of "same seeds across arms"
+# and of the sensitivity sweep being a comparison rather than two unrelated
+# runs. `secrets` would make the eval unreproducible, which is the opposite of
+# the requirement. Scoped to the three simulation paths; nothing on the money
+# path is exempt.
+"sim/*" = ["S311"]
+"eval/*" = ["S311"]
+"tests/sim/*" = ["S311"]
 
 # ── mypy ─────────────────────────────────────────────────────────────────────
 [tool.mypy]

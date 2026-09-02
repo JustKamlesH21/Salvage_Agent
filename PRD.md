@@ -63,7 +63,7 @@ Priority levels are hard. No P1 work begins until every P0 has a passing test.
 | FR-09 | Dry-run default, explicit arm step | Nothing reaches Razorpay unless armed with a confirm token |
 | FR-10 | Global kill switch | Engaging it freezes all pending and scheduled actions within one scheduler tick |
 | FR-11 | Scheduler with fire-time gate re-check | Test: action scheduled 10:00, fired 19:30, blocked by G1 |
-| FR-12 | Outcome simulator with documented calibration | Every parameter has a `source` field; sensitivity ±20% does not flip the A/B ranking |
+| FR-12 | Outcome simulator with documented calibration | Every parameter has a `source` field; sensitivity ±20% does not flip the A/B ranking. **Built day 5. First half met (every parameter sourced, zero `measured`, stated as such). Second half NOT met: the ranking DOES flip at ±20% — reported as the result rather than treated as a failing test, and the consequence is that no recovery-rate uplift is claimed anywhere. See `sim/CALIBRATION.md`.** |
 | FR-13 | Eval harness, arms A/B, arm C conditional, 3–5 seeds | `eval/results.json` committed with a reported range across seeds (**OUT OF SCOPE, Sep 2 replan: the original 20-seed/95%-CI protocol** — three days does not support a statistically powered comparison; see PRD §11 and SALVAGE_SPEC §5.10) |
 | FR-14 | Audit API exposing full decision tape | Every decision returns ordered gate verdicts including passes and suppressed alternatives |
 | FR-15 | Command Deck screen | Money counters, per-class recovery, live decision feed |
@@ -470,6 +470,19 @@ The product's defining feature. Full clause mapping lives in `COMPLIANCE.md`; su
 | G10_IDEMPOTENT | Refuse any action whose idempotency key exists | Correctness |
 
 Every gate module exports `CLAUSE_REF` and `RULE_TEXT`. The build fails if either is missing.
+
+**Timing is not a gate — day 5 addition.** `api/policy/timing.py` resolves a
+policy rule's `timing` (`NEXT_PAYDAY_WINDOW`, `HOURS_24`) and the diagnosis's
+`timing_hint` into a concrete "not before" moment for a charge the chain has
+already permitted. It sits in policy, not in the chain, because gates decide
+what is *permitted* and this decides when a permitted thing is *worth doing*.
+It can only ever push an action later, never earlier and never past a gate,
+and whatever it schedules is re-gated in full when it fires.
+
+This existed only as unread YAML until day 5: the rules carried `timing:` from
+day 3, `PolicyDecision` carried it into the pipeline, and the pipeline ignored
+it, so every `RETRY_SCHEDULED` fired immediately. The batch found it by having
+the baseline win. See NOTES.md's 2026-09-04 entry.
 
 **Scope notes, day 4 addition (spec-guardian review) — each is a decision
 made during implementation, not a silent narrowing:**

@@ -1,69 +1,72 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { CaseView } from './components/CaseView'
+import { CommandDeck } from './components/CommandDeck'
+import { StatusBar } from './components/StatusBar'
+import { api, type Posture } from './lib/api'
 
-/** Safety posture reported by GET /health. Which mode you are in is never a guess. */
-type Health = {
-  status: string
-  app_env: string
-  dry_run: boolean
-  kill_switch: boolean
-  storage_tz: string
-  compliance_tz: string
+/**
+ * Two screens, addressed by hash so a case is linkable and the back button
+ * works. No router dependency — there are two routes, and a library for two
+ * routes would be a layer that has not earned its existence.
+ */
+function caseIdFromHash(): string | null {
+  const match = window.location.hash.match(/^#\/case\/(.+)$/)
+  return match ? match[1] : null
 }
 
-/** Day 0 placeholder. The Command Deck (S1) and Decision Tape (S2) land on day 9. */
 export default function App() {
-  const [health, setHealth] = useState<Health | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [caseId, setCaseId] = useState<string | null>(caseIdFromHash)
+  const [posture, setPosture] = useState<Posture | null>(null)
 
   useEffect(() => {
-    fetch('/api/health')
-      .then((r) => (r.ok ? (r.json() as Promise<Health>) : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then(setHealth)
-      .catch((e: Error) => setError(e.message))
+    const onHashChange = () => setCaseId(caseIdFromHash())
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
-  const armed = health !== null && !health.dry_run
+  useEffect(() => {
+    let alive = true
+    const load = () =>
+      api
+        .posture()
+        .then((p) => alive && setPosture(p))
+        .catch(() => undefined)
+    void load()
+    const timer = setInterval(() => void load(), 5000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [])
+
+  const openCase = useCallback((id: string) => {
+    window.location.hash = `#/case/${id}`
+  }, [])
+
+  const goHome = useCallback(() => {
+    window.location.hash = ''
+  }, [])
+
+  const onKill = useCallback((engaged: boolean) => {
+    void api.kill(engaged).then(setPosture)
+  }, [])
 
   return (
     <div className="min-h-screen">
-      <header
-        className={`flex flex-wrap items-center gap-4 border-b px-4 py-3 ${
-          armed ? 'bg-stamp text-paper' : 'border-rule bg-paper text-ink'
-        }`}
-      >
-        <span className="font-display text-lg font-semibold tracking-tight">SALVAGE</span>
-        <span className="data text-xs uppercase">
-          {health === null ? '⬤ api unreachable' : armed ? '⬤ ARMED' : '⬤ DRY RUN'}
-        </span>
-        <span className="data ml-auto text-xs text-dim">
-          {health?.compliance_tz ?? 'Asia/Kolkata'} · gates evaluated IST
-        </span>
-      </header>
-
-      <main className="mx-auto max-w-3xl px-4 py-10">
-        <h1 className="font-display text-2xl">Scaffolding</h1>
-        <p className="mt-2 max-w-prose text-sm">
-          The Command Deck lands on day 9. Until then this page proves one thing: the frontend can
-          read the API's safety posture, and the chrome changes colour when the system is armed.
-        </p>
-
-        {error !== null && (
-          <p className="data mt-6 border-l-2 border-amber pl-3 text-sm">
-            API unreachable ({error}). Start it with <code>make api</code>, then reload.
-          </p>
-        )}
-
-        {health !== null && (
-          <dl className="data mt-6 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
-            {Object.entries(health).map(([key, value]) => (
-              <div key={key} className="contents">
-                <dt className="text-dim">{key}</dt>
-                <dd>{String(value)}</dd>
-              </div>
-            ))}
-          </dl>
+      <StatusBar posture={posture} onKill={onKill} onHome={goHome} />
+      <main className="mx-auto max-w-6xl">
+        {caseId ? (
+          <CaseView caseId={caseId} onBack={goHome} />
+        ) : (
+          <CommandDeck onOpenCase={openCase} />
         )}
       </main>
+      <footer className="mx-auto max-w-6xl border-t border-rule px-4 py-4">
+        <p className="data text-[10px] leading-relaxed text-dim">
+          Timestamps stored UTC, rendered IST. Gates evaluate in IST. Dry run unless the
+          bar says otherwise — and live dispatch is not built in this submission.
+        </p>
+      </footer>
     </div>
   )
 }

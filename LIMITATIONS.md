@@ -176,17 +176,52 @@ rather than silently absent, same discipline as everything else in this file.
 
 ## Measurement
 
-- **Batch outcomes come from a simulator, not from real issuer behaviour.**
-  Calibration sources will be documented and marked *measured*, *cited* or
-  *assumed* per PRD §6 FR-12's acceptance criterion (still P0, still in
-  scope) — but as of day 4, `sim/` is scaffolding only; the simulator, its
-  calibration sourcing, and the ±20% sensitivity check are not built yet
-  (that is day 7/8 work, PRD §11). **This entry previously implied a
-  sensitivity analysis was already published — it was not; corrected on
-  spec-guardian's day 4 review (D9).** Once built, the A-versus-B *ranking*
-  is the claim being made; the absolute ₹ figure is not a prediction. No
-  sensitivity range should be quoted on camera or in the README until this
-  entry is updated to say the simulator exists.
+- **Batch outcomes come from a simulator, not from real issuer behaviour, and
+  the simulator has zero `measured` parameters.** Every value in
+  `sim/calibration.yaml` is `cited` or `assumed`; none was observed in this
+  project's own traffic, because Razorpay test mode would not produce a
+  realistic decline distribution (1 of 110 published reasons reproduced at
+  all). `sim/CALIBRATION.md` shows the per-attempt-versus-cumulative
+  arithmetic rather than leaving it implicit.
+
+- **The ±20% sensitivity sweep FLIPS the ranking, and that is the reported
+  result.** At ×0.8 the baseline leads on net recovery; at ×1.2 Salvage does.
+  FR-12's acceptance criterion asked whether the ranking survives ±20%: it
+  does not. **This submission therefore does not claim Salvage recovers more
+  money than the baseline.** The recovery comparison sits inside the noise of
+  a calibration we wrote ourselves. The differences that do hold across every
+  seed — ~35% fewer attempts per recovery, zero wasted attempts on hard
+  declines against the baseline's 30 per run, zero compliance violations
+  against the baseline's 22 out-of-window contacts — do not depend on the
+  calibration being right, and those are the only comparative claims made.
+
+- **Arm A is modelled as retrying regardless of the AFA threshold.** In
+  reality the RBI e-mandate framework binds Razorpay's own auto-debits too, so
+  a real baseline would also be blocked above ₹15,000. Modelling it that way
+  would have made the baseline look worse. It was left as SPEC §5.10's literal
+  "three blind retries" description instead — the comparison is harsher on
+  Salvage this way, which is the direction an honest simplification should
+  err.
+
+- **The batch's contact-window violations for arm A apply Salvage's own
+  reading of the Fair Practices Code to both arms.** We read the circular as
+  covering automated messaging, so the baseline's blind dunning email counts
+  as a violation when it lands outside 08:00–19:00 IST. That reading is stated
+  in COMPLIANCE.md and applied consistently; a reader who disagrees with it
+  should discount that row for both arms, not one.
+
+- **Cases needing an AFA or re-authorisation link resolve as closed, not
+  recovered.** No webhook in this build's scope reports that a customer
+  completed such a flow, so the simulation issues the link once and the case
+  ends. The deliberate above-₹15,000 slice in the cohort exists to exercise
+  G3_AFA's block-and-remedy path, not to model a completion that does not
+  exist. Real recovery rates for those classes would be higher than reported.
+
+- **The batch runs against `mongomock`, not a real MongoDB.** The pipeline,
+  gates and executor code are identical; the storage engine is not.
+  `mongomock` enforces the plain unique indexes the executor's idempotency
+  depends on, but does not model partial-index semantics (see the events-index
+  entry above). A batch against real Atlas has not been run.
 
 - **Payday inference is a heuristic** over prior successful charge dates, not
   real salary data.

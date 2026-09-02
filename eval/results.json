@@ -1,0 +1,688 @@
+{
+  "generated_at": "2026-09-02T10:26:44.289497+00:00",
+  "headline": {
+    "recovery_rate": {
+      "finding": "Not distinguishable. Salvage and the baseline land close enough on net recovery that a \u00b120% change to the simulator's calibration reverses their order. This run does not support a claim that Salvage recovers more money than three blind retries.",
+      "baseline_net": {
+        "min": 0.20871912999024775,
+        "max": 0.4609241924051003,
+        "runs": 3
+      },
+      "salvage_net": {
+        "min": 0.30944659964087784,
+        "max": 0.4094355674762093,
+        "runs": 3
+      },
+      "sensitivity_ranking_holds": false
+    },
+    "attempt_efficiency": {
+      "finding": "Salvage reaches comparable recovery with materially fewer charge attempts, and never spends one on a decline that cannot recover.",
+      "baseline_attempts_per_recovery": {
+        "min": 4.090909090909091,
+        "max": 5.3,
+        "runs": 3
+      },
+      "salvage_attempts_per_recovery": {
+        "min": 2.8947368421052633,
+        "max": 3.388888888888889,
+        "runs": 3
+      },
+      "baseline_wasted_on_hard_declines": {
+        "min": 30,
+        "max": 30,
+        "runs": 3
+      },
+      "salvage_wasted_on_hard_declines": {
+        "min": 0,
+        "max": 0,
+        "runs": 3
+      }
+    },
+    "compliance": {
+      "finding": "Zero compliance violations across every Salvage run, verified from the record of what was dispatched rather than from the gate verdicts that were supposed to guarantee it. The baseline's blind dunning email lands outside the 08:00\u201319:00 IST contact window on a fifth of cases.",
+      "baseline": [
+        {
+          "contacts_outside_0800_1900_ist": 22,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        {
+          "contacts_outside_0800_1900_ist": 19,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        {
+          "contacts_outside_0800_1900_ist": 29,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        }
+      ],
+      "salvage": [
+        {
+          "contacts_outside_0800_1900_ist": 0,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        {
+          "contacts_outside_0800_1900_ist": 0,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        {
+          "contacts_outside_0800_1900_ist": 0,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        }
+      ]
+    },
+    "llm_contribution": {
+      "finding": "The LLM drove 6 of 623 decisions across arm B, and arm B matched arm C on every metric in every seed. On this cohort the model changed no outcome. Invariant 2 is why: the deterministic normaliser wins whenever it is not UNKNOWN, which is almost always, and the cohort's UNKNOWN slice is genuinely out of Salvage's domain. Reported as measured, per SPEC \u00a75.10.",
+      "llm_calls": 623,
+      "llm_driven_decisions": 6,
+      "latency_cost_note": "Arm B took roughly 80s per seed against arm C's 2s \u2014 about a 40\u00d7 decision-latency cost for no measured change in outcome."
+    }
+  },
+  "protocol": {
+    "cohort_size": 40,
+    "seeds": [
+      11,
+      23,
+      37
+    ],
+    "arms": [
+      "A",
+      "B",
+      "C"
+    ],
+    "reporting": "Range across seeds (min\u2013max). NOT a confidence interval: N=3 does not support one, and no number here implies statistical significance. PRD \u00a711, SALVAGE_SPEC \u00a75.10.",
+    "outcomes": "Simulated (sim/calibration.yaml). Not real issuer behaviour.",
+    "baseline_caveat": "Arm A's T+1/T+2/T+3 ladder is doc-derived from Razorpay's documentation, not observed in test mode \u2014 see LIMITATIONS.md."
+  },
+  "ranking_by_net_recovery_rate": [
+    "A",
+    "B=C"
+  ],
+  "sensitivity": {
+    "question": "Does \u00b120% on every calibrated rate and modifier flip the ranking of Salvage against the baseline?",
+    "arms_swept": [
+      "A",
+      "C"
+    ],
+    "arms_swept_note": "Arm B is represented by arm C, which is the same pipeline with the LLM call disabled. See llm_driven_decisions in the per-arm results for how much the LLM changes.",
+    "reference_ranking": [
+      "A"
+    ],
+    "perturbations": [
+      {
+        "factor": 0.8,
+        "ranking": [
+          "A",
+          "C"
+        ],
+        "matches_baseline": false,
+        "net_recovery_rate": {
+          "A": {
+            "min": 0.304611099168964,
+            "max": 0.4338258507446097,
+            "runs": 3
+          },
+          "C": {
+            "min": 0.21246281803964162,
+            "max": 0.3497591823570159,
+            "runs": 3
+          }
+        }
+      },
+      {
+        "factor": 1.2,
+        "ranking": [
+          "C",
+          "A"
+        ],
+        "matches_baseline": false,
+        "net_recovery_rate": {
+          "A": {
+            "min": 0.31459413639299083,
+            "max": 0.4727544171464171,
+            "runs": 3
+          },
+          "C": {
+            "min": 0.3485874293312925,
+            "max": 0.4751269151994508,
+            "runs": 3
+          }
+        }
+      }
+    ],
+    "ranking_holds": false
+  },
+  "ranges": {
+    "A": {
+      "recovery_rate": {
+        "min": 0.2129813481816712,
+        "max": 0.47033315073313803,
+        "runs": 3
+      },
+      "net_recovery_rate": {
+        "min": 0.20871912999024775,
+        "max": 0.4609241924051003,
+        "runs": 3
+      },
+      "recovered_paise": {
+        "min": 2544702,
+        "max": 6180092,
+        "runs": 3
+      },
+      "net_recovered_paise": {
+        "min": 2493777,
+        "max": 6056460,
+        "runs": 3
+      },
+      "attempts_per_recovery": {
+        "min": 4.090909090909091,
+        "max": 5.3,
+        "runs": 3
+      },
+      "contacts_per_case": {
+        "min": 1.0,
+        "max": 1.0,
+        "runs": 3
+      },
+      "median_time_to_recovery_hours": {
+        "min": 24.0,
+        "max": 48.0,
+        "runs": 3
+      },
+      "wasted_attempts_on_hard_declines": {
+        "min": 30,
+        "max": 30,
+        "runs": 3
+      },
+      "exception_rate": {
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 3
+      },
+      "actions_blocked_by_gate": {
+        "min": 0,
+        "max": 0,
+        "runs": 3
+      }
+    },
+    "B": {
+      "recovery_rate": {
+        "min": 0.3164352809148498,
+        "max": 0.4184505597734619,
+        "runs": 3
+      },
+      "net_recovery_rate": {
+        "min": 0.30944659964087784,
+        "max": 0.4094355674762093,
+        "runs": 3
+      },
+      "recovered_paise": {
+        "min": 3965712,
+        "max": 5581063,
+        "runs": 3
+      },
+      "net_recovered_paise": {
+        "min": 3877782,
+        "max": 5460826,
+        "runs": 3
+      },
+      "attempts_per_recovery": {
+        "min": 2.8947368421052633,
+        "max": 3.388888888888889,
+        "runs": 3
+      },
+      "contacts_per_case": {
+        "min": 0.975,
+        "max": 1.0,
+        "runs": 3
+      },
+      "median_time_to_recovery_hours": {
+        "min": 66.40833333333333,
+        "max": 185.3,
+        "runs": 3
+      },
+      "wasted_attempts_on_hard_declines": {
+        "min": 0,
+        "max": 0,
+        "runs": 3
+      },
+      "exception_rate": {
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 3
+      },
+      "actions_blocked_by_gate": {
+        "min": 53,
+        "max": 63,
+        "runs": 3
+      }
+    },
+    "C": {
+      "recovery_rate": {
+        "min": 0.3164352809148498,
+        "max": 0.4184505597734619,
+        "runs": 3
+      },
+      "net_recovery_rate": {
+        "min": 0.30944659964087784,
+        "max": 0.4094355674762093,
+        "runs": 3
+      },
+      "recovered_paise": {
+        "min": 3965712,
+        "max": 5581063,
+        "runs": 3
+      },
+      "net_recovered_paise": {
+        "min": 3877782,
+        "max": 5460826,
+        "runs": 3
+      },
+      "attempts_per_recovery": {
+        "min": 2.8947368421052633,
+        "max": 3.388888888888889,
+        "runs": 3
+      },
+      "contacts_per_case": {
+        "min": 0.975,
+        "max": 1.0,
+        "runs": 3
+      },
+      "median_time_to_recovery_hours": {
+        "min": 66.40833333333333,
+        "max": 185.3,
+        "runs": 3
+      },
+      "wasted_attempts_on_hard_declines": {
+        "min": 0,
+        "max": 0,
+        "runs": 3
+      },
+      "exception_rate": {
+        "min": 0.0,
+        "max": 0.0,
+        "runs": 3
+      },
+      "actions_blocked_by_gate": {
+        "min": 53,
+        "max": 63,
+        "runs": 3
+      }
+    }
+  },
+  "per_arm": {
+    "A": [
+      {
+        "cases": 40,
+        "at_risk_paise": 11948004,
+        "recovered_paise": 2544702,
+        "recovery_rate": 0.2129813481816712,
+        "cost_paise": 50925,
+        "net_recovered_paise": 2493777,
+        "net_recovery_rate": 0.20871912999024775,
+        "recovered_cases": 19,
+        "charge_attempts": 92,
+        "attempts_per_recovery": 4.842105263157895,
+        "contacts": 40,
+        "contacts_per_case": 1.0,
+        "median_time_to_recovery_hours": 24.0,
+        "wasted_attempts_on_hard_declines": 30,
+        "exception_rate": 0.0,
+        "outcomes": {
+          "not_recovered": 21,
+          "recovered": 19
+        },
+        "escalations": 0,
+        "actions_blocked_by_gate": 0,
+        "blocks_by_gate": {},
+        "blocks_by_clause": {},
+        "llm_calls": 0,
+        "llm_driven_decisions": 0,
+        "decision_latency_ms_p50": null,
+        "decision_latency_ms_p95": null,
+        "compliance": {
+          "contacts_outside_0800_1900_ist": 22,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        "seed": 11
+      },
+      {
+        "cases": 40,
+        "at_risk_paise": 13337449,
+        "recovered_paise": 5353838,
+        "recovery_rate": 0.40141394355097443,
+        "cost_paise": 107107,
+        "net_recovered_paise": 5246731,
+        "net_recovery_rate": 0.39338339737981376,
+        "recovered_cases": 22,
+        "charge_attempts": 90,
+        "attempts_per_recovery": 4.090909090909091,
+        "contacts": 40,
+        "contacts_per_case": 1.0,
+        "median_time_to_recovery_hours": 36.0,
+        "wasted_attempts_on_hard_declines": 30,
+        "exception_rate": 0.0,
+        "outcomes": {
+          "recovered": 22,
+          "not_recovered": 18
+        },
+        "escalations": 0,
+        "actions_blocked_by_gate": 0,
+        "blocks_by_gate": {},
+        "blocks_by_clause": {},
+        "llm_calls": 0,
+        "llm_driven_decisions": 0,
+        "decision_latency_ms_p50": null,
+        "decision_latency_ms_p95": null,
+        "compliance": {
+          "contacts_outside_0800_1900_ist": 19,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        "seed": 23
+      },
+      {
+        "cases": 40,
+        "at_risk_paise": 13139818,
+        "recovered_paise": 6180092,
+        "recovery_rate": 0.47033315073313803,
+        "cost_paise": 123632,
+        "net_recovered_paise": 6056460,
+        "net_recovery_rate": 0.4609241924051003,
+        "recovered_cases": 20,
+        "charge_attempts": 106,
+        "attempts_per_recovery": 5.3,
+        "contacts": 40,
+        "contacts_per_case": 1.0,
+        "median_time_to_recovery_hours": 48.0,
+        "wasted_attempts_on_hard_declines": 30,
+        "exception_rate": 0.0,
+        "outcomes": {
+          "recovered": 20,
+          "not_recovered": 20
+        },
+        "escalations": 0,
+        "actions_blocked_by_gate": 0,
+        "blocks_by_gate": {},
+        "blocks_by_clause": {},
+        "llm_calls": 0,
+        "llm_driven_decisions": 0,
+        "decision_latency_ms_p50": null,
+        "decision_latency_ms_p95": null,
+        "compliance": {
+          "contacts_outside_0800_1900_ist": 29,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        "seed": 37
+      }
+    ],
+    "B": [
+      {
+        "cases": 40,
+        "at_risk_paise": 11948004,
+        "recovered_paise": 3965712,
+        "recovery_rate": 0.33191418415996515,
+        "cost_paise": 87930,
+        "net_recovered_paise": 3877782,
+        "net_recovery_rate": 0.324554795930768,
+        "recovered_cases": 20,
+        "charge_attempts": 61,
+        "attempts_per_recovery": 3.05,
+        "contacts": 39,
+        "contacts_per_case": 0.975,
+        "median_time_to_recovery_hours": 185.3,
+        "wasted_attempts_on_hard_declines": 0,
+        "exception_rate": 0.0,
+        "outcomes": {
+          "recovered": 20,
+          "not_recovered": 17,
+          "window_closed": 3
+        },
+        "escalations": 2,
+        "actions_blocked_by_gate": 53,
+        "blocks_by_gate": {
+          "G2_PREDEBIT": 38,
+          "G10_IDEMPOTENT": 14,
+          "G6_OPTOUT": 1
+        },
+        "blocks_by_clause": {
+          "RBI Digital Payments E-mandate Framework, 2026 (RBI/DPSS/2026-27/396, 21 Apr 2026)": 39,
+          "Correctness \u2014 executor idempotency (CLAUDE.md invariant 9)": 14
+        },
+        "llm_calls": 211,
+        "llm_driven_decisions": 2,
+        "decision_latency_ms_p50": 263.757718999841,
+        "decision_latency_ms_p95": 1109.4984850024048,
+        "compliance": {
+          "contacts_outside_0800_1900_ist": 0,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        "seed": 11
+      },
+      {
+        "cases": 40,
+        "at_risk_paise": 13337449,
+        "recovered_paise": 5581063,
+        "recovery_rate": 0.4184505597734619,
+        "cost_paise": 120237,
+        "net_recovered_paise": 5460826,
+        "net_recovery_rate": 0.4094355674762093,
+        "recovered_cases": 19,
+        "charge_attempts": 55,
+        "attempts_per_recovery": 2.8947368421052633,
+        "contacts": 39,
+        "contacts_per_case": 0.975,
+        "median_time_to_recovery_hours": 102.55,
+        "wasted_attempts_on_hard_declines": 0,
+        "exception_rate": 0.0,
+        "outcomes": {
+          "recovered": 19,
+          "not_recovered": 18,
+          "window_closed": 3
+        },
+        "escalations": 2,
+        "actions_blocked_by_gate": 55,
+        "blocks_by_gate": {
+          "G2_PREDEBIT": 38,
+          "G10_IDEMPOTENT": 15,
+          "G6_OPTOUT": 2
+        },
+        "blocks_by_clause": {
+          "RBI Digital Payments E-mandate Framework, 2026 (RBI/DPSS/2026-27/396, 21 Apr 2026)": 40,
+          "Correctness \u2014 executor idempotency (CLAUDE.md invariant 9)": 15
+        },
+        "llm_calls": 201,
+        "llm_driven_decisions": 2,
+        "decision_latency_ms_p50": 261.15481099986937,
+        "decision_latency_ms_p95": 1032.3812360002194,
+        "compliance": {
+          "contacts_outside_0800_1900_ist": 0,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        "seed": 23
+      },
+      {
+        "cases": 40,
+        "at_risk_paise": 13139818,
+        "recovered_paise": 4157902,
+        "recovery_rate": 0.3164352809148498,
+        "cost_paise": 91830,
+        "net_recovered_paise": 4066072,
+        "net_recovery_rate": 0.30944659964087784,
+        "recovered_cases": 18,
+        "charge_attempts": 61,
+        "attempts_per_recovery": 3.388888888888889,
+        "contacts": 40,
+        "contacts_per_case": 1.0,
+        "median_time_to_recovery_hours": 66.40833333333333,
+        "wasted_attempts_on_hard_declines": 0,
+        "exception_rate": 0.0,
+        "outcomes": {
+          "not_recovered": 21,
+          "recovered": 18,
+          "window_closed": 1
+        },
+        "escalations": 2,
+        "actions_blocked_by_gate": 63,
+        "blocks_by_gate": {
+          "G2_PREDEBIT": 42,
+          "G10_IDEMPOTENT": 17,
+          "G6_OPTOUT": 4
+        },
+        "blocks_by_clause": {
+          "RBI Digital Payments E-mandate Framework, 2026 (RBI/DPSS/2026-27/396, 21 Apr 2026)": 46,
+          "Correctness \u2014 executor idempotency (CLAUDE.md invariant 9)": 17
+        },
+        "llm_calls": 211,
+        "llm_driven_decisions": 2,
+        "decision_latency_ms_p50": 312.2441390005406,
+        "decision_latency_ms_p95": 1158.7760600014008,
+        "compliance": {
+          "contacts_outside_0800_1900_ist": 0,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        "seed": 37
+      }
+    ],
+    "C": [
+      {
+        "cases": 40,
+        "at_risk_paise": 11948004,
+        "recovered_paise": 3965712,
+        "recovery_rate": 0.33191418415996515,
+        "cost_paise": 87930,
+        "net_recovered_paise": 3877782,
+        "net_recovery_rate": 0.324554795930768,
+        "recovered_cases": 20,
+        "charge_attempts": 61,
+        "attempts_per_recovery": 3.05,
+        "contacts": 39,
+        "contacts_per_case": 0.975,
+        "median_time_to_recovery_hours": 185.3,
+        "wasted_attempts_on_hard_declines": 0,
+        "exception_rate": 0.0,
+        "outcomes": {
+          "recovered": 20,
+          "not_recovered": 17,
+          "window_closed": 3
+        },
+        "escalations": 2,
+        "actions_blocked_by_gate": 53,
+        "blocks_by_gate": {
+          "G2_PREDEBIT": 38,
+          "G10_IDEMPOTENT": 14,
+          "G6_OPTOUT": 1
+        },
+        "blocks_by_clause": {
+          "RBI Digital Payments E-mandate Framework, 2026 (RBI/DPSS/2026-27/396, 21 Apr 2026)": 39,
+          "Correctness \u2014 executor idempotency (CLAUDE.md invariant 9)": 14
+        },
+        "llm_calls": 0,
+        "llm_driven_decisions": 0,
+        "decision_latency_ms_p50": 5.11381699834601,
+        "decision_latency_ms_p95": 18.540455002948875,
+        "compliance": {
+          "contacts_outside_0800_1900_ist": 0,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        "seed": 11
+      },
+      {
+        "cases": 40,
+        "at_risk_paise": 13337449,
+        "recovered_paise": 5581063,
+        "recovery_rate": 0.4184505597734619,
+        "cost_paise": 120237,
+        "net_recovered_paise": 5460826,
+        "net_recovery_rate": 0.4094355674762093,
+        "recovered_cases": 19,
+        "charge_attempts": 55,
+        "attempts_per_recovery": 2.8947368421052633,
+        "contacts": 39,
+        "contacts_per_case": 0.975,
+        "median_time_to_recovery_hours": 102.55,
+        "wasted_attempts_on_hard_declines": 0,
+        "exception_rate": 0.0,
+        "outcomes": {
+          "recovered": 19,
+          "not_recovered": 18,
+          "window_closed": 3
+        },
+        "escalations": 2,
+        "actions_blocked_by_gate": 55,
+        "blocks_by_gate": {
+          "G2_PREDEBIT": 38,
+          "G10_IDEMPOTENT": 15,
+          "G6_OPTOUT": 2
+        },
+        "blocks_by_clause": {
+          "RBI Digital Payments E-mandate Framework, 2026 (RBI/DPSS/2026-27/396, 21 Apr 2026)": 40,
+          "Correctness \u2014 executor idempotency (CLAUDE.md invariant 9)": 15
+        },
+        "llm_calls": 0,
+        "llm_driven_decisions": 0,
+        "decision_latency_ms_p50": 5.909547999181086,
+        "decision_latency_ms_p95": 20.3615370010084,
+        "compliance": {
+          "contacts_outside_0800_1900_ist": 0,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        "seed": 23
+      },
+      {
+        "cases": 40,
+        "at_risk_paise": 13139818,
+        "recovered_paise": 4157902,
+        "recovery_rate": 0.3164352809148498,
+        "cost_paise": 91830,
+        "net_recovered_paise": 4066072,
+        "net_recovery_rate": 0.30944659964087784,
+        "recovered_cases": 18,
+        "charge_attempts": 61,
+        "attempts_per_recovery": 3.388888888888889,
+        "contacts": 40,
+        "contacts_per_case": 1.0,
+        "median_time_to_recovery_hours": 66.40833333333333,
+        "wasted_attempts_on_hard_declines": 0,
+        "exception_rate": 0.0,
+        "outcomes": {
+          "not_recovered": 21,
+          "recovered": 18,
+          "window_closed": 1
+        },
+        "escalations": 2,
+        "actions_blocked_by_gate": 63,
+        "blocks_by_gate": {
+          "G2_PREDEBIT": 42,
+          "G10_IDEMPOTENT": 17,
+          "G6_OPTOUT": 4
+        },
+        "blocks_by_clause": {
+          "RBI Digital Payments E-mandate Framework, 2026 (RBI/DPSS/2026-27/396, 21 Apr 2026)": 46,
+          "Correctness \u2014 executor idempotency (CLAUDE.md invariant 9)": 17
+        },
+        "llm_calls": 0,
+        "llm_driven_decisions": 0,
+        "decision_latency_ms_p50": 7.002931997703854,
+        "decision_latency_ms_p95": 22.210387000086484,
+        "compliance": {
+          "contacts_outside_0800_1900_ist": 0,
+          "cases_over_attempt_budget": 0,
+          "dispatches_without_an_allow_verdict": 0
+        },
+        "seed": 37
+      }
+    ]
+  }
+}

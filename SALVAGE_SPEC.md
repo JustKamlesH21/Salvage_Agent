@@ -628,9 +628,19 @@ PRD §11 for the authoritative table and the full trade.
 | 4 (Sep 3) | **Compliance gates G0–G10 + clause refs** + executor, dry-run only, kill switch, no in-doubt reconciliation. One `compliance-auditor` pass, single round, findings fixed same session | Every gate tested incl. fire-time re-eval; boundary check passes |
 | 5 (Sep 4) | Frontend S1 (minimal) + S2 (Command Deck + Decision Tape); eval harness, run A/B (C conditional) × 3–5 seeds, commit results **as produced**; README, video, submit | The blocked-chit screenshot exists; `eval/results.json` committed with a range across seeds, not CIs |
 
-**Cut:** simulator calibration sensitivity chart (F22, out of scope — see
-PRD §6), S3 Batch Evidence (the A/B/C table moves into README.md instead),
-ARCHITECTURE.md as a separate polish pass (fold into README if time allows).
+**Cut:** S3 Batch Evidence (the A/B/C table moves into README.md instead).
+
+**Un-cut on day 5, and this note supersedes the earlier line here that listed
+them as cut:** the ±20% sensitivity analysis was built after all (PRD §12's
+risk table always expected it published, and PRD §6 never listed FR-12 as out
+of scope — this section's cut list was the only place claiming otherwise, and
+PRD wins). ARCHITECTURE.md was written properly rather than folded into the
+README. What *was* cut is F22's sensitivity **chart** — the analysis runs in
+`make batch` and its result is reported as text in `eval/results.json`,
+`sim/CALIBRATION.md` and the README, with no S3 screen to render it on.
+
+The answer it produced is worth stating here because it is not the convenient
+one: **the ranking does not hold at ±20%.** See `sim/CALIBRATION.md`.
 
 **Slip rule:** cut arm C before cutting the eval batch itself, and cut
 nothing further from Day 4. The gates and the executor are the submission;
