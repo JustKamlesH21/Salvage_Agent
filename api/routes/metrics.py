@@ -50,12 +50,20 @@ async def rulebook() -> dict[str, Any]:
         module = __import__(gate_fn.__module__, fromlist=["CLAUSE_REF"])
         gates.append(
             {
-                "gate": module.CLAUSE_REF.split(":")[0]
-                if ":" in module.CLAUSE_REF
-                else module.__name__.rsplit(".", 1)[-1].upper(),
+                # The module name is the gate id — g3_afa is G3_AFA. This used to
+                # prefer the part of CLAUSE_REF before a colon, which no clause
+                # reference has ever contained: the branch never fired, and the
+                # first citation to include a colon would have silently renamed
+                # its gate to a fragment of a legal reference.
+                "gate": module.__name__.rsplit(".", 1)[-1].upper(),
                 "module": module.__name__,
                 "clause_ref": module.CLAUSE_REF,
                 "rule_text": module.RULE_TEXT,
+                # Present only where the gate checks something narrower than, or
+                # different from, the clause it cites (PRD §9). Serving it here is
+                # what stops a screen rendering the clause as a description of
+                # behaviour the gate does not have.
+                "scope_note": getattr(module, "SCOPE_NOTE", None),
             }
         )
 

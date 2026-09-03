@@ -24,6 +24,16 @@ RULE_TEXT = (
     "including automated messaging."
 )
 
+
+# Where this gate checks something narrower than, or different from, the clause
+# it cites. Served by GET /rulebook so no screen can show the clause without
+# the caveat that goes with it. PRD §9's scope notes are the source.
+SCOPE_NOTE = (
+    "Governs contact actions only. RETRY_NOW and RETRY_SCHEDULED are silent "
+    "auto-debits with no customer-facing message attached, so the window does "
+    "not apply to them — the clause governs contact, not collection. PRD §9."
+)
+
 WINDOW_OPEN_HOUR = 8
 WINDOW_CLOSE_HOUR = 19
 

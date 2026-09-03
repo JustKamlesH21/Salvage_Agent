@@ -25,6 +25,18 @@ RULE_TEXT = (
 )
 
 
+# Where this gate checks something narrower than, or different from, the clause
+# it cites. Served by GET /rulebook so no screen can show the clause without
+# the caveat that goes with it. PRD §9's scope notes are the source.
+SCOPE_NOTE = (
+    "Reinterpreted, and this is what the gate actually does: the A1-A10 action "
+    "catalog has no dedicated post-debit confirmation action to gate, so rather "
+    "than check that a confirmation was sent, it refuses a new charge when the "
+    "customer has no channel to be confirmed on. Salvage does not itself send "
+    "post-debit confirmations in this build. PRD §9."
+)
+
+
 def evaluate(ctx: GateContext) -> GateVerdict:
     if ctx.action not in CHARGE_ACTIONS:
         return GateVerdict(

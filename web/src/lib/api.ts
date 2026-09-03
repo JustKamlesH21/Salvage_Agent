@@ -85,7 +85,15 @@ export type Posture = {
 /** GET /rulebook — the gate chain and the policy rules, read off the live
  *  modules by introspection, so this cannot drift from the code it describes. */
 export type Rulebook = {
-  gates: { gate: string; module: string; clause_ref: string; rule_text: string }[]
+  gates: {
+    gate: string
+    module: string
+    clause_ref: string
+    rule_text: string
+    /** Set only where the gate checks something narrower than, or different
+     *  from, the clause it cites. PRD §9. */
+    scope_note: string | null
+  }[]
   gate_order_note: string
   remediation: Record<string, string>
   max_remediation_hops: number

@@ -19,6 +19,16 @@ RULE_TEXT = (
 )
 
 
+# Where this gate checks something narrower than, or different from, the clause
+# it cites. Served by GET /rulebook so no screen can show the clause without
+# the caveat that goes with it. PRD §9's scope notes are the source.
+SCOPE_NOTE = (
+    "CLOSE_NO_ACTION and SUPPRESS are exempt from this block. An opted-out "
+    "case must still be closeable and suppressible; gating those on opt-out "
+    "status would block the very action opt-out exists to produce. PRD §9."
+)
+
+
 def evaluate(ctx: GateContext) -> GateVerdict:
     if not ctx.opted_out:
         return GateVerdict(

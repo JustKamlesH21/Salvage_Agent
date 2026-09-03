@@ -177,12 +177,25 @@ function GateCatalogue({ rulebook }: { rulebook: Rulebook }) {
               <span className="data text-data text-ink">{name}</span>
               <span className="col-span-2 col-start-1 text-data-sm text-dim sm:col-span-1 sm:col-start-3">
                 {isOpen ? gate.rule_text : gate.rule_text.slice(0, 96).trimEnd() + '…'}
+                {gate.scope_note ? (
+                  <span className="ml-2 whitespace-nowrap text-block">narrower in scope</span>
+                ) : null}
               </span>
             </button>
             {isOpen ? (
               <div className="border-t border-rule/60 bg-white/50 px-3 py-3">
                 <p className="eyebrow">Clause</p>
                 <p className="data mt-1 text-data-sm text-ink">{gate.clause_ref}</p>
+                {/* Where the gate is narrower than the clause, say so in the same
+                    breath. The rule text above is what the regulation requires;
+                    this is what Salvage actually checks, and they are not always
+                    the same thing. */}
+                {gate.scope_note ? (
+                  <>
+                    <p className="eyebrow mt-3">What this gate actually checks</p>
+                    <p className="mt-1 max-w-[68ch] text-data-sm text-block">{gate.scope_note}</p>
+                  </>
+                ) : null}
                 {remedy ? (
                   <p className="mt-3 flex flex-wrap items-center gap-2 text-data-sm text-dim">
                     <span className="text-dim">
