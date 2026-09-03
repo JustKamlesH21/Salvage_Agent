@@ -19,18 +19,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.config import settings
 from api.db.client import close_client, get_db
 from api.db.collections import apply_indexes
+from api.db.repositories import Repositories
 from api.ingest.router import router as ingest_router
 from api.routes.cases import router as cases_router
 from api.routes.control import kill_switch_engaged
 from api.routes.control import router as control_router
 from api.routes.metrics import router as metrics_router
 from api.routes.stream import router as stream_router
+from api.scheduler.live import scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    await apply_indexes(get_db())
-    yield
+    db = get_db()
+    await apply_indexes(db)
+    # The tick is what makes a replanned action actually fire, and with it the
+    # fire-time gate re-evaluation this product's compliance claim rests on.
+    # Disabled unless SCHEDULER_TICK_SECONDS says otherwise.
+    async with scheduler(Repositories(db), settings().scheduler_tick_seconds):
+        yield
     await close_client()
 
 
@@ -69,4 +76,5 @@ async def health() -> dict[str, Any]:
         "kill_switch": kill_switch_engaged(),
         "storage_tz": cfg.tz,
         "compliance_tz": cfg.compliance_tz,
+        "scheduler_tick_seconds": cfg.scheduler_tick_seconds,
     }

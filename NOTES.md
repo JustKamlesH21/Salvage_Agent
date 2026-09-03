@@ -1667,3 +1667,86 @@ built from two sources rather than one: `SALVAGE_SPEC` §6.5 defines the desk as
 have shown an empty table and called it the exception desk. They are different
 kinds of event — one is the agent working, one is the agent broken — so they
 are two tables with the distinction written on the page.
+
+---
+
+## 2026-09-03 — day 6b: the scheduler goes live, and the audit found six things **demo**
+
+`fire_due_jobs()` has been pure, tested and **uncalled** since day 4. The
+compliance claim this product rests on — *gates are re-evaluated when an action
+fires, not when it was scheduled* — was true of the code and unobservable in a
+running system: a case that replanned to 08:00 tomorrow sat there forever.
+`api/scheduler/live.py` is the tick that calls it, off by default
+(`SCHEDULER_TICK_SECONDS=0`), for the same reason `DRY_RUN` defaults true.
+
+**Bug 1, found by running it rather than testing it.** Live case ids are
+Mongo `ObjectId`s; the first version stringified them for the whole tick, so
+`repos.cases.get()` missed every time. `due_jobs()` returned eleven jobs and
+`tick()` fired none — no log, no exception, no exception-desk row. The silent
+failure was the lesser half: had the lookup succeeded, the executor would have
+written audit rows keyed by the string while `build_gate_context()` reads them
+back keyed by the ObjectId, so **every scheduler-dispatched attempt would have
+been invisible to G4_BUDGET's 14-day count and G5_COOLDOWN's 48-hour gap** —
+attempts that compliance is supposed to bound, uncounted.
+
+Sixteen tests passed throughout, because the fixtures hand-seed `_id: "case_1"`.
+*Class: the recurring one in this log — a test written from the same
+misunderstanding as the code agrees with the code.* Third time this exact shape
+has appeared here. `tests/scheduler/test_live.py::TestObjectIdCases` now seeds
+ObjectIds and asserts the audit rows land where the gates read them.
+
+**What the compliance audit then found, on top of that.** All fixed in the same
+session, all with tests:
+
+- `_record()` wrote `failure_class: "SCHEDULED"`, which is not a member of
+  `FailureClass`. `_prior_failure_classes()` does `FailureClass(raw)` over every
+  prior decision, so **the next webhook on any fired case would have raised** —
+  telling Razorpay to keep retrying an event Salvage would never accept. Masked
+  only by bug 1. It also wrote `rule_id: "SCHEDULER"`, a citation resolving to
+  nothing in the rulebook the tape cites from. Both now carry the originating
+  decision's real diagnosis and policy forward: the diagnosis has not changed
+  and the rule that chose the action still chose it. What changed is the
+  verdicts, which is what the document exists to record.
+- **No fire-time BLOCK wrote an audit row.** `fire_due_jobs()` has no `on_block`
+  hook and the tick passed none, so every refusal at fire time — the refusals
+  this feature exists to demonstrate — was invisible to the deck's
+  `blocked_by_compliance` counter, which counts `phase="block"` rows.
+- **The tick would have charged a case that already recovered.** No gate covers
+  "already paid": G9_HALTED reads `subscription_status` off the case document,
+  written once at find-or-create and never updated, and Salvage only ever hears
+  about failures (FR-28). Inert while nothing called `fire_due_jobs`; an
+  unattended charge the moment something did. Now refused unless the case is
+  `open` or `recovering`.
+- **`amount_paise` was read from the case document**, which
+  `build_gate_context()`'s own docstring forbids in as many words — the case doc
+  holds the *first* failure's figure, so G3_AFA would stamp the tape with a
+  threshold comparison against a number that is not being charged. The amount
+  the gates actually reasoned about was **not persisted anywhere**, so the
+  scheduler could not have been right even in principle. `decisions` now carries
+  it and the tick refuses a job without one.
+- **The kill switch froze only probabilistically.** The early return is correct,
+  but `due_jobs()` and the case reads are awaits: engage the switch in between
+  and the chain runs, G0 blocks, and the terminal BLOCK is persisted as the
+  case's latest decision — cancelling the scheduled action rather than holding
+  it, with no way back on release. Re-checked before the record is written.
+- **The remedy idempotency key had no occasion component**
+  (`{case}:remedy:{action}`), so the second `CREATE_AFA_LINK` on a case *ever* —
+  months later — presented the same key, was refused by G10, and the loop
+  settled on `CLOSE_NO_ACTION`. A recoverable case closed because a remedy of
+  that kind was issued once. Pre-existing in `runner.py` since day 4 and
+  unreachable until now.
+
+**Also found, not a bug but worth naming:** the ingest path reads `customers`
+and never writes it, so a case opened purely from a webhook has no customer
+record and G8_POSTDEBIT refuses every charge on it — correctly. Same shape as
+day 5's "the cohort was wrong, the gate was right". `scripts/demo.py` puts the
+customer on file first, which is what production would do: the customer exists
+because they signed up, not because a payment failed.
+
+**And the LLM primary moved to Ollama** (`gpt-oss:120b`) — Groq was rate
+limiting. Verified end to end on an `UNKNOWN` class, which is the only path
+where the model drives anything. Worth knowing: `LLM_FALLBACK_*` has been in
+`api/config.py` and `.env` since day 1 and **nothing reads it** —
+`_call_llm()` uses `LLM_BASE_URL`/`API_KEY`/`MODEL` only. There is no fallback.
+The Groq values are parked in those slots as a one-line revert, not as a
+safety net.

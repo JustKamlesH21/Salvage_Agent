@@ -56,6 +56,11 @@ export type CaseSummary = {
   failure_class: string | null
   final_action: string | null
   final_verdict: string | null
+  /** When the latest verdict is `replan`, the moment the action comes due and
+   *  the gates re-run. Null otherwise. */
+  final_at: string | null
+  /** The gate that moved it, so a wait carries its reason. */
+  replanned_by: string | null
   decision_id: string | null
 }
 

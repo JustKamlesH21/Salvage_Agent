@@ -134,6 +134,20 @@ def _summarise_case(case: dict[str, Any], decision: dict[str, Any] | None) -> di
             "failure_class": (decision or {}).get("diagnosis", {}).get("failure_class"),
             "final_action": (decision or {}).get("final", {}).get("action"),
             "final_verdict": (decision or {}).get("final", {}).get("verdict"),
+            # When the latest verdict is `replan`, this is when the action comes
+            # due — what the deck needs to show a case as waiting rather than
+            # finished, and to count down to the moment the gates re-run.
+            "final_at": (decision or {}).get("final", {}).get("at"),
+            # Which gate moved it, so the wait has a reason attached and not
+            # just a clock. First REPLAN verdict in chain order.
+            "replanned_by": next(
+                (
+                    v.get("gate")
+                    for v in (decision or {}).get("gate_results", [])
+                    if v.get("verdict") == "REPLAN"
+                ),
+                None,
+            ),
             "decision_id": (decision or {}).get("decision_id"),
         }
     )

@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     dry_run: bool = True
     arm_confirm_token: str = ""
     kill_switch: bool = False
+    # The live scheduler tick, in seconds. 0 disables it and no loop starts.
+    # Off by default for the same reason DRY_RUN is on by default: a background
+    # process that dispatches money actions should not begin because someone
+    # ran the server. api/scheduler/live.py.
+    scheduler_tick_seconds: int = 0
     audit_chain_key: str = ""
 
     # App

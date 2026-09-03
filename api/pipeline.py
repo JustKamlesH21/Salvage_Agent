@@ -220,8 +220,18 @@ async def _prior_failure_classes(case_id: Any, repos: Repositories) -> tuple[Fai
     classes: list[FailureClass] = []
     for doc in prior_decisions:
         raw = doc.get("diagnosis", {}).get("failure_class")
-        if raw:
+        if not raw:
+            continue
+        try:
             classes.append(FailureClass(raw))
+        except ValueError:
+            # A value that is not a member of the enum is bad data, and the
+            # place to fix it is wherever wrote it — but refusing the whole
+            # webhook over one unreadable historical row would tell Razorpay to
+            # keep retrying an event this system will never accept. Skipped, so
+            # the cycle proceeds on the classes it can read. (compliance-auditor
+            # F4, day 6: the scheduler briefly wrote "SCHEDULED" here.)
+            continue
     return tuple(classes)
 
 
@@ -514,6 +524,13 @@ async def process_payment_failed(
         # claiming otherwise.
         "decision_id": decision_id,
         "case_id": case["_id"],
+        # The amount this decision's gates were evaluated against, taken from
+        # the payload that triggered it. The case document is written once at
+        # find-or-create and never updated, so it is NOT a safe source for a
+        # later cycle — G3_AFA would be re-evaluated against the first failure's
+        # figure. Anything re-gating this decision later (api/scheduler/live.py)
+        # reads it from here, and refuses the job if it is absent.
+        "amount_paise": amount_paise,
         "run_id": run_id,
         "created_at": now_utc,
         "diagnosis": {

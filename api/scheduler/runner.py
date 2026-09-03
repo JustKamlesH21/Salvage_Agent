@@ -71,8 +71,18 @@ async def fire_due_jobs(
             # The builder derives its GateContext.action from job.action, so
             # a remedy must be gated via a job that actually carries it — not
             # the original job, and not a bare action re-check.
+            # The key carries the occasion, not just the case and the action.
+            # Without `decision_id` two scheduled jobs on the same case months
+            # apart that both need CREATE_AFA_LINK present the SAME key: the
+            # second is refused by G10_IDEMPOTENT, G10 has no remediation, and
+            # the loop settles on CLOSE_NO_ACTION — a recoverable case closed
+            # because a remedy of that kind was issued once, ever.
+            # (compliance-auditor F7, day 6.) Still stable across retries of
+            # the same occasion, which is what idempotency actually needs.
             remedy_job = dataclasses.replace(
-                _job, action=action, idempotency_key=f"{_job.case_id}:remedy:{action.value}"
+                _job,
+                action=action,
+                idempotency_key=f"{_job.case_id}:{_job.decision_id}:remedy:{action.value}",
             )
             dispatch_job = remedy_job
             remedy_ctx = await gate_context_builder(remedy_job, now_utc)

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type CaseDetail, type Rulebook } from '../lib/api'
 import { istStamp, rupees } from '../lib/format'
+import { CaseJourney } from './CaseJourney'
 import { DecisionTape } from './DecisionTape'
 import { ArrowLeft } from './icons'
 
@@ -108,6 +109,8 @@ export function CaseView({ caseId, onBack }: { caseId: string; onBack: () => voi
           </div>
         ))}
       </dl>
+
+      <CaseJourney detail={detail} />
 
       <div className="space-y-4 p-4">
         {detail.decisions.length === 0 ? (

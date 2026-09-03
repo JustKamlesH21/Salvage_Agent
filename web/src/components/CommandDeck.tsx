@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type CaseSummary, type Counters, type FeedItem } from '../lib/api'
 import { ago, istStamp, percent, rupees, rupeesBare } from '../lib/format'
+import {
+  STAGE_LABEL,
+  stageForSummary,
+  untilLabel,
+  type StageName,
+} from '../lib/journey'
 
 /**
  * S1 — the Command Deck.
@@ -139,11 +145,44 @@ function Feed({ items, onOpen }: { items: FeedItem[]; onOpen: (id: string) => vo
   )
 }
 
+const STAGE_TONE: Partial<Record<StageName, string>> = {
+  waiting: 'text-replan',
+  dispatched: 'text-allow',
+  settled: 'text-dim',
+}
+
+function StageCell({ summary }: { summary: CaseSummary }) {
+  const stage = stageForSummary(summary)
+  return <span className={STAGE_TONE[stage] ?? 'text-ink'}>{STAGE_LABEL[stage]}</span>
+}
+
+/** What the case is waiting on, and how long. A row that says "in 12h 20m ·
+ *  G1_WINDOW" tells you both that nothing is stuck and why it is not moving. */
+function NextCell({ summary, now }: { summary: CaseSummary; now: number }) {
+  if (summary.final_verdict !== 'replan' || !summary.final_at) {
+    return <span className="text-dim">—</span>
+  }
+  return (
+    <span className="flex flex-wrap items-baseline gap-x-2">
+      <span className="text-replan">{untilLabel(summary.final_at, now)}</span>
+      {summary.replanned_by ? <span className="text-dim">{summary.replanned_by}</span> : null}
+    </span>
+  )
+}
+
 export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }) {
   const [cases, setCases] = useState<CaseSummary[]>([])
   const [counters, setCounters] = useState<Counters | null>(null)
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+
+  // The deck polls every 4s; the countdowns move every second in between, so
+  // the board reads as live rather than as a table that occasionally redraws.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     let alive = true
@@ -254,6 +293,8 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
                 <th className="px-4 py-2 font-normal">Case</th>
                 <th className="px-4 py-2 font-normal">Class</th>
                 <th className="hidden px-4 py-2 font-normal sm:table-cell">Action</th>
+                <th className="px-4 py-2 font-normal">Stage</th>
+                <th className="hidden px-4 py-2 font-normal lg:table-cell">Next</th>
                 <th className="px-4 py-2 text-right font-normal">Amount ₹</th>
                 <th className="hidden px-4 py-2 font-normal md:table-cell">Opened</th>
               </tr>
@@ -292,6 +333,12 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
                     >
                       {item.final_action ?? '—'}
                     </span>
+                  </td>
+                  <td className="data px-4 py-2 text-data">
+                    <StageCell summary={item} />
+                  </td>
+                  <td className="data hidden px-4 py-2 text-data-sm lg:table-cell">
+                    <NextCell summary={item} now={now} />
                   </td>
                   <td className="data px-4 py-2 text-right text-data">
                     {rupeesBare(item.amount_paise)}
