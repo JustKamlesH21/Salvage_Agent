@@ -1,345 +1,411 @@
-# Pitch — the 5-minute narration
+# Pitch — the 5-minute script
 
-`VIDEO.md` is the shot list. This is the *story*: what you say, in what order, and
-why each beat is there. Track 03 is judged on the problem and the solution, not
-on feature count, so the arc below spends its first minute on the problem and
-never stops referring back to it.
+Plain version. Every beat tells you **what to show**, then **what to say**.
 
-Read the spoken lines as written or in your own words — but keep the **bolded
-sentences verbatim**. Those are the ones doing the work.
+Say the lines in your own words. Keep the **bold** ones close to as written.
 
 ---
 
-## The decision you have to make first: how live is live?
+## Your screen map
 
-You asked whether to make a real payment on camera. **Yes — open with one.** It
-answers "is this hardcoded?" before a judge thinks to ask it, and nothing else
-answers it as cheaply.
+Open these before you start. You will only ever switch between five things.
 
-But be clear-eyed about what test mode will give you, because the limitation is
-itself worth saying out loud:
-
-| | Real Razorpay test payment | Replayed signed webhook |
+| # | Name it in your head | What it is |
 |---|---|---|
-| Signature | Razorpay's, over the wire | Ours, same HMAC check, same code path |
-| Failure reason available | `payment_failed` only | Any of the 110 published reasons |
-| Classifies as | `CHANNEL_DOWNTIME` | any of the 9 classes |
-| Can show the ₹18,000 AFA case | **No** | Yes |
-| Subscription-mandate decline | **No** — checkout has no fail option | Yes |
+| **A** | **Slide** | A title card, or just your face |
+| **B** | **Diagram** | `localhost:5173/architecture.html` |
+| **C** | **Razorpay** | Razorpay Dashboard, test mode |
+| **D** | **Deck** | `localhost:5173` — the main Salvage screen |
+| **E** | **Terminal** | One terminal window |
 
-`LIMITATIONS.md` records the reason: **1 of 110 published decline reasons has a
-real fixture behind it.** A card documented as `insufficient_fund` returned a
-generic `BAD_REQUEST_ERROR` in this account.
+That is it. Five tabs. If you are ever unsure, you are on **Deck**.
 
-So the shape is: **one real payment to prove the pipe is real, then replays to
-show the cases test mode cannot produce — and say exactly why you're switching.**
-That sentence is worth more than a fully-live demo would be, because it shows you
-found the platform's edge instead of pretending it wasn't there.
+---
 
-### Before you record — the live-payment setup
+## Setup, 15 minutes before recording
+
+**1. Start everything**
 
 ```bash
-ngrok http 8000                      # copy the https URL it prints
-```
-
-Put that URL + `/webhooks/razorpay` into the Razorpay Dashboard →
-Settings → Webhooks, subscribed to `payment.failed`, with the same secret as
-`RAZORPAY_WEBHOOK_SECRET`. Free ngrok URLs rotate, so the one in `.env` is stale
-— re-do this on the day.
-
-Then create a test payment link or checkout for a small amount and fail it.
-**Rehearse this once before recording.** If the webhook does not arrive within
-about ten seconds, fall back to `scripts/demo.py one` and use the "replay" line —
-it costs you nothing.
-
-### Everything else running
-
-```bash
-make verify                                       # 8/8, leave it on screen
+make verify                                       # leave the 8/8 on screen in Terminal
 DRY_RUN=true SCHEDULER_TICK_SECONDS=5 \
   .venv/bin/python -m uvicorn api.main:app --port 8000 &
 cd web && npm run dev &
-.venv/bin/python scripts/demo.py cohort --delay 2   # background cases, off camera
 ```
 
-**Three minutes before you reach beat 6**, in a second terminal:
+**2. Put some cases on the Deck** (so it is not empty on camera)
 
 ```bash
-.venv/bin/python scripts/demo.py soon --minutes 4
+.venv/bin/python scripts/demo.py cohort --delay 2
 ```
 
-**Tabs to have open:** the Command Deck, the architecture page
-(`localhost:5173/architecture.html`), `LIMITATIONS.md`, and an editor on
-`api/diagnose/schema.py`.
+**3. Open a tunnel so Razorpay can reach your laptop**
 
-**The case the script names:** `6a99566a217e50181ae63811` — ₹18,000, insufficient
-funds, 22 verdicts, G2 and G3 both refusing. If you re-seed, mint a fresh one with
-`scripts/demo.py one --amount 1800000` and use the id it prints.
+```bash
+ngrok http 8000
+```
+
+Copy the `https://…ngrok-free.app` URL it prints.
+
+**4. Point Razorpay at it**
+
+In **Razorpay** → Settings → Webhooks → Add New Webhook:
+
+- URL: `<your ngrok url>/webhooks/razorpay`
+- Secret: the same value as `RAZORPAY_WEBHOOK_SECRET` in your `.env`
+- Tick only: **`payment.failed`**
+
+**5. Make a Payment Link you will use on camera**
+
+In **Razorpay** → Payment Links → Create Payment Link. Any amount, ₹499 is fine.
+Keep the link open in a tab. *(You get 30 links per test account. One is plenty.)*
+
+**6. Rehearse the failure once.** Open the link, and on the checkout page choose
+**Fail** on the Success/Fail toggle. Check a case appears on the **Deck** within
+about ten seconds. If it does, you are ready. If it does not, use the fallback in
+beat 3 and nothing is lost.
+
+**7. Two minutes before you start recording**, run this in **Terminal**:
+
+```bash
+.venv/bin/python scripts/demo.py soon --minutes 6
+```
+
+It prints a case id. You will need it in beat 6.
 
 ---
 
-## Beat 1 · 0:00–0:40 · The problem, as it happened to you
+# The script
 
-**On screen:** you, or a plain title card. No UI yet.
+## Beat 1 — 0:00 to 0:40 — the problem
 
-> "Last year my gym membership was cancelled and I didn't cancel it.
+**SHOW: Slide** (your face, or a title card)
+
+**SAY:**
+
+> Last year my gym membership got cancelled, and I did not cancel it.
 >
-> The auto-debit ran on the 28th. My salary lands on the 1st. So it failed —
-> not because I'd left, not because the card was dead, just because it ran three
-> days early. Then it retried. Same time the next day, and the day after, and the
-> day after that. All three failed for the same reason: the money still wasn't
-> there yet.
+> The auto-debit ran on the 28th. My salary comes on the 1st. So it failed. Not
+> because I left, not because my card was dead. It just ran three days early.
 >
-> **On the fourth day the subscription was cancelled, and at ten to eleven that
+> Then it tried again the next day. Failed. And the day after. Failed. And the
+> day after that.
+>
+> **On the fourth day the subscription was cancelled, and at ten to eleven at
 > night I got a WhatsApp asking me to pay.**
 >
-> I never resubscribed. The gym lost about eighteen thousand rupees a year, and
-> they lost it because their payment system retried on a timer instead of asking
-> why."
+> I never signed up again. The gym lost about eighteen thousand rupees a year,
+> because their payment system retried on a timer instead of asking why.
 
-*Pause. Then the turn:*
+*Pause here. Then:*
 
-> "That retry wasn't badly built. It's exactly what Razorpay does, by design —
-> T+1, T+2, T+3, then halt. It's a safety net, and it works. It just doesn't
-> know anything about *why* the charge failed. Salvage is the part that does."
-
-**Why this beat works:** it is one story, it is true, and it contains both
-failures at once — the merchant lost the revenue *and* the customer got contacted
-at 22:50, which is illegal under the RBI Fair Practices Code. The rest of the
-demo pays off both halves.
-
----
-
-## Beat 2 · 0:40–1:15 · The shape of the solution
-
-**On screen:** `localhost:5173/architecture.html`, section 2 — the retry timeline.
-
-> "Here's the gap. Razorpay's three retries, above the line. They're blind: same
-> schedule, same hour, whether the card is dead or the customer is three days from
-> payday. After the third one, the subscription halts."
-
-Scroll slightly so the green marker is visible.
-
-> "Salvage puts one attempt below the line, at the next payday window. And this
-> is the part I want to be precise about, because it's a documented Razorpay
-> behaviour and not a trick: **a manual charge on an issued invoice doesn't count
-> against the subscription's remaining retries.** So the intelligent attempt goes
-> on top of the safety net instead of spending it."
-
-Scroll to the pipeline.
-
-> "Six stages between the webhook and the money. **The model diagnoses. It never
-> decides to move money.** That's the whole architecture in one sentence, and
-> everything after this is me showing you it's enforced rather than promised."
-
----
-
-## Beat 3 · 1:15–2:00 · A real payment, failing, live ★
-
-**On screen:** split — browser with the Razorpay test checkout, and the Command
-Deck.
-
-> "So let's make one fail. This is Razorpay test mode, my real keys, a real
-> checkout."
-
-Fail the payment. Switch to the deck.
-
-> "That webhook just came from Razorpay, over the internet, to my machine. The
-> signature is verified against the raw bytes before anything parses it. And
-> there's the case — classified, gated, decided, in under a second."
-
-Let the live feed line land.
-
-> "**Nothing about that was staged. There's no fixture behind it and no database
-> seeding.** The event went into an append-only hash-chained log, the normaliser
-> classified it, policy chose a play, eleven gates ran, and the executor wrote its
-> audit row."
-
-**Now the honest pivot — do not skip this:**
-
-> "Now, one thing I have to tell you. Razorpay test mode publishes a hundred and
-> ten decline reasons. **Exactly one of them actually reproduces** — everything
-> else comes back as a generic failure, and subscription-mandate checkout has no
-> fail option at all. That's in LIMITATIONS.md.
+> That retry is not badly built. It is exactly what Razorpay does, and it is a
+> safety net. It just does not know anything about why the charge failed.
 >
-> So for the cases test mode can't produce, I replay signed webhooks — same
-> signature check, same pipeline, same gates, same code. What I can't fake is the
-> gate chain. Let me show you that."
+> Salvage is the part that does.
 
 ---
 
-## Beat 4 · 2:00–3:00 · The signature case ★
+## Beat 2 — 0:40 to 1:15 — how we solve it
 
-**On screen:** open case `6a99566a217e50181ae63811`.
+**SHOW: Diagram.** Scroll to the timeline picture (section 2).
 
-Start at the top — the journey rail.
+**SAY:**
 
-> "Where this case is, and what it's waiting for. Like tracking a parcel — except
-> the estimated time moved for a reason, and the reason is a clause."
-
-Then the tape.
-
-> "Eighteen thousand rupees, insufficient funds. The normaliser classifies that
-> deterministically — no model involved. Policy proposes a scheduled retry, timed
-> to payday. Then eleven gates run. **All eleven, in order, every time — even
-> after one has already refused**, because the record has to show the whole chain
-> and not just the first no."
-
-Point at the two cards.
-
-> "Twenty-two gate verdicts on one decision. Eleven for the retry it wanted to
-> make — G2 refuses it, because no pre-debit notice has gone out and the e-mandate
-> framework wants twenty-four hours' warning. G3 refuses it too, because eighteen
-> thousand is over the fifteen-thousand ceiling for a debit without additional
-> authentication.
+> Here is the gap. The three boxes on top are Razorpay's retries. Same schedule
+> every time, whether your card is dead or your salary is two days away. After
+> the third one, the subscription stops.
 >
-> And eleven more for what it did instead. **That arrow is the part I'd point at
-> if you only look at one thing.** G2 didn't just say no — it said what to do
-> instead. Salvage substituted the pre-debit notice, and then put *that* through
-> the same eleven gates from scratch. It doesn't get to assume its own fix is
-> legal."
+> The green box underneath is what Salvage adds. One attempt, on payday.
 
-Click a blocked gate.
+*Point at the green line.*
 
-> "Every refusal carries the clause it came from. That rule text is read live off
-> the gate module — it isn't copied into a document that can drift."
+> And this bit matters: Razorpay's own documentation says a manual charge on an
+> invoice does not use up your three retries. So we add a smart attempt on top of
+> the safety net, instead of spending it.
 
-Click **G8_POSTDEBIT**, where the scope note shows.
+**Scroll down to the six boxes (section 3).**
 
-> "And where a gate checks something narrower than the clause it cites, it says
-> so. G8's clause says every collection must be followed by a confirmation.
-> Salvage doesn't send those. What it actually does is refuse a charge to someone
-> who has no channel to be confirmed on. **A judge who read the clause and assumed
-> the behaviour would be wrong, and that's our job to prevent, not yours to
-> catch.**"
-
----
-
-## Beat 5 · 3:00–3:20 · The two boundaries, in code
-
-**On screen:** editor, `api/diagnose/schema.py`, the `DiagnosisContext` dataclass.
-
-Keep this to twenty seconds. Show two things and stop.
-
-> "Two guarantees, and neither is a policy document.
+> Six steps between the webhook and the money. **The AI does one of them. It
+> reads the failure and tells us why. It never decides to move money.**
 >
-> This is everything the model is allowed to see. There's no field for a name, a
-> contact, an email, or an amount. **Leaking a customer's details into a prompt
-> isn't against the rules here — it's a type error.**"
-
-Switch to the terminal showing `make verify` 8/8.
-
-> "And one file in this codebase may import the Razorpay SDK. Check four in that
-> run is the boundary scan — if a second file ever imports it, the build fails.
-> Same for check five: every gate has to cite a clause, and every policy rule has
-> to explain itself, or it doesn't ship."
+> That is the whole design. Everything after this is me showing you it is
+> enforced, not just promised.
 
 ---
 
-## Beat 6 · 3:20–4:00 · The thing that makes it an agent ★
+## Beat 3 — 1:15 to 2:00 — make a payment fail, live ★
 
-**On screen:** back to the deck. The `soon` case is counting down in **Next**.
+**SHOW: Razorpay,** with your Payment Link open. Then switch to **Deck**.
 
-> "This one's waiting. Not stuck — waiting, and it says why: G2 moved it, because
-> the notice went out minutes ago and the framework wants twenty-four hours."
+**Do this, on camera:**
 
-*Say the caveat while you wait:*
+1. Open your Payment Link
+2. Enter any test card, or pick UPI
+3. On the checkout screen, hit the **Fail** button on the Success/Fail toggle
+4. Switch to **Deck**
 
-> "I've shortened that wait for the recording — I moved the scheduled time, not
-> the gates."
+**SAY, while doing it:**
 
-Watch it fire.
+> Let me just break one. This is Razorpay test mode, my real account, a real
+> payment link.
 
-> "It just fired on its own. And here's what happened in that moment: the gate
-> context was rebuilt from the database — the audit history, the contacts, the
-> opt-out state — and **all eleven gates ran again against the world as it is
-> now**, not as it looked when the action was scheduled."
+*Click Fail.*
 
-Open the case; there's a new tape.
+> And that fails.
 
-> "And look — it refused it *again*. I moved the clock forward; I didn't make the
-> notice older. So G2 said no a second time and rescheduled it.
+*Switch to Deck. Wait for the new row.*
+
+> That webhook came from Razorpay, over the internet, to my laptop. We check the
+> signature before we read a single field. And there is the case — classified,
+> checked, decided.
 >
-> **Compliance that's only checked when you schedule something isn't compliance.**
-> A retry queued at a legal hour that comes due at half past seven in the evening
-> gets refused at half past seven in the evening. That's the whole argument, and
-> that's the thing my gym's payment system didn't do at ten to eleven at night."
+> **Nothing there was pre-loaded. No fixture, no seeded database.**
 
-*(That callback is the strongest line in the script. Land it.)*
+**Then say this. Do not skip it:**
 
----
-
-## Beat 7 · 4:00–4:35 · The numbers, including the bad one ★
-
-**On screen:** `#/how-it-works`, section 05.
-
-> "Forty mandates, three seeds, three arms. Reported as a range across seeds, not
-> a confidence interval — three runs doesn't support one, so we don't imply it."
-
-> "**And here's the number I didn't want.** Salvage does not recover more money
-> than three blind retries. Run the twenty-percent sensitivity check and the
-> ranking flips. So we're not claiming an uplift — that card says 'not
-> distinguishable' because that's what the run says."
-
-> "What does hold, on every seed: comparable recovery for about thirty-five
-> percent fewer attempts. Zero attempts spent on dead cards — the baseline burns
-> thirty a run retrying instruments that can never succeed. And zero contacts
-> outside the eight-to-seven window, against nineteen to twenty-nine per run for
-> the baseline."
-
-> "**That last row is audited from the record of what was actually dispatched and
-> when — without reading a single gate verdict.** If a gate were wrong, it'd show
-> up as a number there instead of hiding behind the gate that got it wrong."
-
----
-
-## Beat 8 · 4:35–5:00 · The edges, and the close
-
-**On screen:** `#/exceptions`, then the kill switch.
-
-> "What the agent refused to decide, and why. An unrecognised failure escalates to
-> a human instead of guessing at a money action."
-
-Click the kill switch. The bar turns red.
-
-> "And there's a stop. It's the first gate in every chain, it needs no token, and
-> nothing dispatches while it's on — including the scheduler, which freezes rather
-> than cancelling. Let go and the work is still owed."
-
-Close on the story:
-
-> "Every number here comes from a simulator, because test mode wouldn't give me a
-> realistic decline distribution — that's in LIMITATIONS.md, along with the fact
-> that our baseline is derived from Razorpay's docs rather than measured, and that
-> live dispatch isn't built.
+> One honest thing. Razorpay's test mode lists a hundred and ten different
+> failure reasons. **Only one of them actually happens in test mode.** Everything
+> else comes back as a generic error. That is written up in our LIMITATIONS file.
 >
-> **What I'd claim is narrower than what I set out to build, and I'd rather tell
-> you that than have you find it.**
->
-> My gym didn't lose me because their system retried. It lost me because it
-> retried without asking why, and messaged me at eleven at night when it ran out
-> of ideas. Salvage is the part that asks why — and the part that isn't allowed to
-> message you at eleven at night."
+> So for the interesting cases, I replay a signed webhook instead. Same signature
+> check, same code, same eleven gates. Let me show you one.
+
+**If the live payment does not work:** say *"test mode is being test mode, here is
+the same thing replayed"*, run `.venv/bin/python scripts/demo.py one --amount 1800000`
+in **Terminal**, and carry on. You lose nothing.
 
 ---
 
-## Cheat sheet
+## Beat 4 — 2:00 to 3:00 — the main screen ★
 
-**Show, in order:** title/face → architecture page (timeline, pipeline) → live
-Razorpay payment → deck → case `6a99566a217e50181ae63811` → gate drawer (G8) →
-`DiagnosisContext` → `make verify` → deck countdown → fired case → results →
-exceptions → kill switch.
+**SHOW: Deck.** Click the ₹18,000 case.
 
-**Code, total ≈ 25 seconds.** `DiagnosisContext` (no PII fields) and the verify
-summary. That's it — resist opening anything else. Judges are buying the problem
-and the solution; code is evidence, not the subject.
+*(If you re-seeded, run `scripts/demo.py one --amount 1800000` and click that one.)*
 
-**Lines to keep verbatim:** the WhatsApp at 22:50; "the model diagnoses, it never
-decides to move money"; "it doesn't get to assume its own fix is legal";
-"compliance that's only checked when you schedule something isn't compliance";
-"here's the number I didn't want"; the closing callback.
+**Look at the top of the page first — the row of six steps.**
 
-**If something breaks:** the live payment is the only fragile beat. If the webhook
-doesn't arrive in ~10s, say *"test mode is being test mode — here's the same event
-replayed"*, run `scripts/demo.py one --amount 1800000`, and carry on. You lose
-nothing; that line is on-message.
+**SAY:**
+
+> This is where the case is right now. Like tracking a delivery. Except the
+> delivery time moved for a reason, and the reason is a rule.
+
+**Now scroll down to the two boxes side by side.**
+
+**SAY:**
+
+> Eighteen thousand rupees. Not enough balance. We work out that this is a
+> temporary money problem, not a dead card, and that is not the AI — that part is
+> plain code.
+>
+> We decide to retry it on payday. Then eleven rules run.
+
+*Point at the left box.*
+
+> This is what we wanted to do. Retry the charge. And two rules say no.
+>
+> The first one: you have to warn the customer 24 hours before you take money.
+> We have not. So, no.
+>
+> The second one: eighteen thousand is over the fifteen thousand limit for taking
+> money without extra authentication. So, no.
+
+*Point at the arrow in the middle, then the right box.*
+
+> **And this arrow is the bit I would show you if you only had ten seconds.**
+>
+> The rule did not just say no. It said what to do instead. So we send the
+> warning notice first. And then we put *that* through the same eleven rules from
+> scratch.
+>
+> It does not get to assume its own fix is allowed.
+
+**Now click on one of the red-stamped rules.**
+
+> Every no comes with the actual regulation it came from. And that text is read
+> live from the code, so it cannot go stale.
+
+---
+
+## Beat 5 — 3:00 to 3:25 — the two promises, in code
+
+**Here is exactly what to do:**
+
+1. **SHOW: Terminal.** Open `api/diagnose/schema.py`. Scroll to the block that
+   says `class DiagnosisContext`. It is about 8 lines. That is all you show.
+2. Then **SHOW: Terminal** with your `make verify` 8/8 output.
+
+**SAY, over the code:**
+
+> Two promises, and neither one is a document.
+>
+> This is everything the AI is allowed to see. Look at it — there is no name, no
+> phone number, no email, no amount.
+>
+> **So leaking a customer's details into the AI is not against our rules. It is
+> impossible. The code would not compile.**
+
+**Now switch to the `make verify` output.**
+
+> And second: exactly one file in this project is allowed to talk to Razorpay.
+>
+> Line four there is the check. If a second file ever tries, the build fails. Not
+> a code review. The build.
+>
+> Line five is the same idea for the rules. Every rule has to name the regulation
+> it comes from, or it does not ship.
+
+**That is the whole code section. Do not open anything else.** Twenty-five
+seconds, then move on.
+
+---
+
+## Beat 6 — 3:25 to 4:05 — it does this on its own ★
+
+### What you are showing, in order
+
+| When | Screen | What is on it |
+|---|---|---|
+| Start | **Deck** | The cases table. Find your `soon` case. Look at the **Next** column. |
+| | | It says something like **`in 1m 20s`** and next to it **`G2_PREDEBIT`**. |
+| | | **The number counts down while you talk.** That is your visual. |
+| Wait | **Deck** | It reaches zero and the row changes by itself |
+| Then | **Deck → case** | Click that case. Scroll to the tapes. **There are now two.** |
+
+**Finding the row:** the table is newest first, so your case is at or near the
+top. It is the one with a live countdown in the **Next** column.
+
+**Ignore the rows further down that say `due now`.** Those are cases from
+earlier runs, from before the scheduler existed, and they will never fire — the
+scheduler refuses them on purpose because their record does not say what amount
+was checked. Nobody will ask. If someone does, that refusal is the system being
+careful, and it is in NOTES.md.
+
+**SAY, while it counts down:**
+
+> Now look at this row. This case is waiting.
+>
+> Not stuck. Waiting, and it tells you why. That rule there moved it, because
+> the warning notice went out a few minutes ago and the regulation says you have
+> to wait twenty-four hours.
+>
+> And that number is counting down on its own.
+
+*(Small honest note, say it here:)*
+
+> I shortened that wait for this video. I moved the clock, not the rules.
+
+**When it hits zero:**
+
+> There. It just went off by itself. Nobody clicked anything.
+>
+> And here is the important part. At that exact moment, it went back to the
+> database, looked up the whole history again, and ran all eleven rules a second
+> time.
+
+**Click into the case. Point at the second tape.**
+
+> Look what it decided. **It said no again.**
+>
+> I moved the clock forward. I did not make the notice any older. The regulation
+> wants twenty-four hours and it has had five minutes. So it refused, and
+> rescheduled itself.
+>
+> **This is the whole point. Checking the rules when you schedule something is
+> not enough. You have to check them again when it actually runs.**
+>
+> That is the thing my gym's system did not do at eleven at night.
+
+---
+
+## Beat 7 — 4:05 to 4:35 — the numbers ★
+
+**SHOW: Deck** → click **How it works** in the top bar → scroll to the bottom
+(the four number boxes).
+
+**SAY:**
+
+> Forty subscriptions, three runs. We report a range, not an average with a
+> confidence interval, because three runs does not earn one.
+
+*Point at the first box.*
+
+> **And here is the number I did not want.**
+>
+> We do not recover more money than three blind retries do. If I change my
+> simulator's settings by twenty percent, the winner flips. So we are not
+> claiming we make more money. That box says "not distinguishable" because that
+> is what the test says.
+
+*Point at the other three boxes.*
+
+> What is true every single time:
+>
+> We get the same result with about a third fewer attempts.
+>
+> We spend zero attempts on dead cards. The old way burns thirty a run, retrying
+> cards that will never work, because it does not know they are dead.
+>
+> And zero messages outside the legal hours. The old way sends nineteen to
+> twenty-nine of them per run.
+>
+> **We checked that last one by looking at what actually got sent, not by asking
+> our own rules whether they worked.**
+
+---
+
+## Beat 8 — 4:35 to 5:00 — the close
+
+**SHOW: Deck** → click **Exception desk** → then back to **Deck** and click the
+red **kill switch** button, top right.
+
+**SAY:**
+
+> This is everything the agent refused to decide. If it does not understand a
+> failure, it hands it to a human instead of guessing with someone's money.
+
+*Click the kill switch. The bar turns red.*
+
+> And there is a stop button. It is the first rule in every check, it needs no
+> password, and nothing moves while it is on.
+
+**SHOW: Slide** (back to your face)
+
+> Every number here comes from a simulator, because test mode would not give me
+> realistic failures. Our comparison is built from Razorpay's documentation, not
+> measured. And we have not built the part that moves real money yet.
+>
+> All of that is written down in our limitations file.
+>
+> **What we can prove is smaller than what we set out to build. I would rather
+> tell you that than have you find it.**
+>
+> My gym did not lose me because their system retried. It lost me because it
+> retried without asking why, and then messaged me at eleven at night.
+>
+> Salvage is the part that asks why. And the part that is not allowed to message
+> you at eleven at night.
+
+---
+
+## One-page cheat sheet
+
+| Beat | Screen | The one thing to show |
+|---|---|---|
+| 1 | Slide | You. The gym story. |
+| 2 | Diagram | Timeline picture, then the six boxes |
+| 3 | Razorpay → Deck | Click Fail. New case appears. |
+| 4 | Deck → case | **Two boxes side by side, and the arrow** |
+| 5 | Terminal | `DiagnosisContext` (8 lines), then verify 8/8 |
+| 6 | Deck | **The countdown in the Next column**, then two tapes |
+| 7 | How it works | Four number boxes. Lead with the bad one. |
+| 8 | Exception desk → kill switch | Bar turns red |
+
+**Six lines to keep:**
+
+1. "At ten to eleven at night I got a WhatsApp asking me to pay."
+2. "The AI reads the failure. It never decides to move money."
+3. "It does not get a chance to assume its own fix is allowed."
+4. "It said no again."
+5. "Here is the number I did not want."
+6. "Salvage is the part that asks why."

@@ -64,10 +64,17 @@ html {
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
-  /* Everything in this class is an identifier — SEND_PRE_DEBIT_NOTICE, a clause
-     ref, a class name — and identifiers have nothing to break on. Left alone
-     they push the page sideways at 375px. Amounts never reach the wrap point, so
-     the ledger column still lines up. */
+  /* Identifiers — SEND_PRE_DEBIT_NOTICE, a clause ref, a class name — have
+     nothing to break on, so left alone they push the page sideways at 375px.
+     Table cells opt out with `whitespace-nowrap`, which wins over this, and
+     scroll inside their own container instead: a name chopped as
+     SEND_PRE_DEBIT_NOTI / CE is worse than a scrollbar. */
+  overflow-wrap: anywhere;
+}
+
+/* Kept as an alias so the intent is legible at the call sites that need it
+   most — the long clause refs. */
+.data-wrap {
   overflow-wrap: anywhere;
 }
 

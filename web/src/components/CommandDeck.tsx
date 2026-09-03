@@ -287,7 +287,8 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
             <span className="data">/webhooks/razorpay</span> and one opens here.
           </p>
         ) : (
-          <table className="w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full">
             <thead>
               <tr className="eyebrow border-b border-rule text-left">
                 <th className="px-4 py-2 font-normal">Case</th>
@@ -306,7 +307,7 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
                   onClick={() => onOpenCase(item.id)}
                   className="cursor-pointer hover:bg-white/60"
                 >
-                  <td className="data px-4 py-2 text-data">
+                  <td className="data px-4 py-2 whitespace-nowrap text-data">
                     {/* The focusable control. The row's onClick is a convenience
                         for a mouse; this is what a keyboard reaches. */}
                     <button
@@ -320,8 +321,8 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
                       {item.customer_ref}
                     </button>
                   </td>
-                  <td className="data px-4 py-2 text-data">{item.failure_class ?? '—'}</td>
-                  <td className="data hidden px-4 py-2 text-data sm:table-cell">
+                  <td className="data px-4 py-2 whitespace-nowrap text-data">{item.failure_class ?? '—'}</td>
+                  <td className="data hidden px-4 py-2 whitespace-nowrap text-data sm:table-cell">
                     <span
                       className={
                         item.final_verdict === 'allow'
@@ -334,22 +335,23 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
                       {item.final_action ?? '—'}
                     </span>
                   </td>
-                  <td className="data px-4 py-2 text-data">
+                  <td className="data px-4 py-2 whitespace-nowrap text-data">
                     <StageCell summary={item} />
                   </td>
-                  <td className="data hidden px-4 py-2 text-data-sm lg:table-cell">
+                  <td className="data hidden px-4 py-2 whitespace-nowrap text-data-sm lg:table-cell">
                     <NextCell summary={item} now={now} />
                   </td>
                   <td className="data px-4 py-2 text-right text-data">
                     {rupeesBare(item.amount_paise)}
                   </td>
-                  <td className="data hidden px-4 py-2 text-data-sm text-dim md:table-cell">
+                  <td className="data hidden px-4 py-2 whitespace-nowrap text-data-sm text-dim md:table-cell">
                     {istStamp(item.opened_at)}
                   </td>
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         )}
       </section>
     </div>

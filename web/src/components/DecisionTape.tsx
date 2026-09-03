@@ -56,7 +56,7 @@ function ExecutedRow({ row }: { row: Executed }) {
       {row.dry_run ? <span className="data text-data-sm text-replan">dry run</span> : null}
       <span className="data text-data-sm text-dim">{istTime(row.at)}</span>
       {row.note ? (
-        <span className="text-data-sm [overflow-wrap:anywhere] text-dim">{row.note}</span>
+        <span className="data-wrap text-data-sm text-dim">{row.note}</span>
       ) : null}
     </div>
   )
@@ -214,7 +214,7 @@ export function DecisionTape({
                 // A clause ref is one 68-character token — RBI/DPSS/2026-27/396
                 // has nothing to break on — so it needs to be allowed to reflow
                 // anywhere, or it pushes the whole page sideways at 375px.
-                <p key={i} className="data text-data-sm [overflow-wrap:anywhere] text-dim">
+                <p key={i} className="data data-wrap text-data-sm text-dim">
                   <span className="struck">{item.action}</span>
                   <span className="mx-2">·</span>
                   {item.blocked_by}

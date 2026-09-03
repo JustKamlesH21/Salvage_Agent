@@ -162,7 +162,7 @@ export function ExceptionDesk({
                   </button>
                 ) : null}
                 {row.detail ? (
-                  <span className="w-full text-data-sm [overflow-wrap:anywhere] text-dim">
+                  <span className="data-wrap w-full text-data-sm text-dim">
                     {row.detail}
                   </span>
                 ) : null}
