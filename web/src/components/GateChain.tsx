@@ -53,9 +53,9 @@ function GateRow({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="grid w-full grid-cols-[1.5rem_1rem_minmax(0,1fr)_1rem] items-center gap-x-2 py-2 text-left hover:bg-white/60 sm:grid-cols-[1.5rem_1rem_auto_minmax(0,1fr)_1rem]"
+        className="grid w-full grid-cols-[2rem_1rem_minmax(0,1fr)_1rem] items-center gap-x-2 py-2 text-left hover:bg-white/60 sm:grid-cols-[2rem_1rem_auto_minmax(0,1fr)_1rem]"
       >
-        <span className="data text-data-sm text-dim">{number}</span>
+        <span className="data whitespace-nowrap text-data-sm text-dim">{number}</span>
 
         {/* Never colour alone: the mark, the strike and the hue all carry it. */}
         <span className={TONE[verdict.verdict]}>

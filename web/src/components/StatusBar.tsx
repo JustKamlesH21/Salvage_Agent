@@ -45,6 +45,14 @@ export function StatusBar({
         SALVAGE
       </button>
 
+      <a
+        href="#/how-it-works"
+        className="eyebrow hover:text-current hover:underline"
+        style={{ color: 'inherit', opacity: 0.75 }}
+      >
+        How it works
+      </a>
+
       <span className="flex items-center gap-2">
         <span
           className={`size-2 rounded-full ${

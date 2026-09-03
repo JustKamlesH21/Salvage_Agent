@@ -1,25 +1,37 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CaseView } from './components/CaseView'
 import { CommandDeck } from './components/CommandDeck'
+import { ExceptionDesk } from './components/ExceptionDesk'
+import { HowItWorks } from './components/HowItWorks'
 import { StatusBar } from './components/StatusBar'
 import { api, type Posture } from './lib/api'
 
 /**
- * Two screens, addressed by hash so a case is linkable and the back button
- * works. No router dependency — there are two routes, and a library for two
- * routes would be a layer that has not earned its existence.
+ * Four screens, addressed by hash so a case is linkable and the back button
+ * works. Still no router dependency — four routes and a regex is less to go
+ * wrong on demo day than a library.
  */
-function caseIdFromHash(): string | null {
-  const match = window.location.hash.match(/^#\/case\/(.+)$/)
-  return match ? match[1] : null
+type Route =
+  | { name: 'deck' }
+  | { name: 'case'; id: string }
+  | { name: 'how' }
+  | { name: 'exceptions' }
+
+function routeFromHash(): Route {
+  const hash = window.location.hash
+  const match = hash.match(/^#\/case\/(.+)$/)
+  if (match) return { name: 'case', id: match[1] }
+  if (hash === '#/how-it-works') return { name: 'how' }
+  if (hash === '#/exceptions') return { name: 'exceptions' }
+  return { name: 'deck' }
 }
 
 export default function App() {
-  const [caseId, setCaseId] = useState<string | null>(caseIdFromHash)
+  const [route, setRoute] = useState<Route>(routeFromHash)
   const [posture, setPosture] = useState<Posture | null>(null)
 
   useEffect(() => {
-    const onHashChange = () => setCaseId(caseIdFromHash())
+    const onHashChange = () => setRoute(routeFromHash())
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
@@ -55,8 +67,12 @@ export default function App() {
     <div className="min-h-screen">
       <StatusBar posture={posture} onKill={onKill} onHome={goHome} />
       <main className="mx-auto max-w-6xl">
-        {caseId ? (
-          <CaseView caseId={caseId} onBack={goHome} />
+        {route.name === 'case' ? (
+          <CaseView caseId={route.id} onBack={goHome} />
+        ) : route.name === 'how' ? (
+          <HowItWorks onBack={goHome} onOpenCase={openCase} />
+        ) : route.name === 'exceptions' ? (
+          <ExceptionDesk onBack={goHome} onOpenCase={openCase} />
         ) : (
           <CommandDeck onOpenCase={openCase} />
         )}

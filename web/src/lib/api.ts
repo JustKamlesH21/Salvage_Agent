@@ -102,6 +102,55 @@ export type Rulebook = {
   }[]
 }
 
+/** A min-max range across seeds. Never a confidence interval — N=3 does not
+ *  support one, and the protocol block says so in its own words. */
+export type SeedRange = { min: number; max: number; runs: number }
+
+/** GET /metrics/batch — eval/results.json, served verbatim. The `finding`
+ *  strings are written by the harness; the UI renders them rather than
+ *  restating them, so no screen can claim more than the run supports. */
+export type BatchMetrics = {
+  generated_at: string
+  headline: {
+    recovery_rate: {
+      finding: string
+      baseline_net: SeedRange
+      salvage_net: SeedRange
+      sensitivity_ranking_holds: boolean
+    }
+    attempt_efficiency: {
+      finding: string
+      baseline_attempts_per_recovery: SeedRange
+      salvage_attempts_per_recovery: SeedRange
+      baseline_wasted_on_hard_declines: SeedRange
+      salvage_wasted_on_hard_declines: SeedRange
+    }
+    compliance: {
+      finding: string
+      baseline: { contacts_outside_0800_1900_ist: number }[]
+      salvage: { contacts_outside_0800_1900_ist: number }[]
+    }
+    llm_contribution: {
+      finding: string
+      llm_calls: number
+      llm_driven_decisions: number
+      latency_cost_note: string
+    }
+  }
+  protocol: { cohort_size: number; seeds: number[]; arms: string[]; reporting: string }
+}
+
+/** GET /exceptions — infrastructure failures, not judgement calls. The pipeline
+ *  crashed or the hash chain could not be appended. */
+export type ExceptionRow = {
+  _id?: string
+  case_id: string | null
+  reason_code: string
+  detail: string | null
+  ts: string | null
+  resolved_by: string | null
+}
+
 export type FeedItem = {
   decision_id: string
   case_id: string
@@ -126,6 +175,8 @@ export const api = {
   case: (id: string) => get<CaseDetail>(`/cases/${id}`),
   posture: () => get<Posture>('/control/status'),
   rulebook: () => get<Rulebook>('/rulebook'),
+  batchMetrics: () => get<BatchMetrics>('/metrics/batch'),
+  exceptions: () => get<{ exceptions: ExceptionRow[]; count: number }>('/exceptions'),
 
   async kill(engaged: boolean): Promise<Posture> {
     await fetch(`${BASE}/control/kill`, {

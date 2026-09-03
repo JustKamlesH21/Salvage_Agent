@@ -67,7 +67,8 @@ Priority levels are hard. No P1 work begins until every P0 has a passing test.
 | FR-13 | Eval harness, arms A/B, arm C conditional, 3–5 seeds | `eval/results.json` committed with a reported range across seeds (**OUT OF SCOPE, Sep 2 replan: the original 20-seed/95%-CI protocol** — three days does not support a statistically powered comparison; see PRD §11 and SALVAGE_SPEC §5.10) |
 | FR-14 | Audit API exposing full decision tape | Every decision returns ordered gate verdicts including passes and suppressed alternatives |
 | FR-15 | Command Deck screen | Money counters, per-class recovery, live decision feed |
-| FR-16 | Case View with Decision Tape | Blocked gates render struck through with overprinted clause |
+| FR-16 | Case View with Decision Tape | Blocked gates render struck through with overprinted clause. **Day 6: the tape was rendering a remediated decision's verdicts flat — `gate_results` is 11 × (1 + hops), not 11 — so the substitution was invisible. Split into one chain per hop; see NOTES.md 2026-09-03.** |
+| FR-16a | Explainer screen (`#/how-it-works`) | **Added day 6, not in the Sep 2 replan.** The pipeline, the eleven gates, the remediation loop and the batch findings on one page, for a reader who has not seen the system. Every section reads from an existing endpoint (`/rulebook`, `/cases`, `/metrics/batch`) rather than restating anything, so it cannot drift from the code or overclaim past the run. Justified by §3's "Buildathon panel" audience row: the Decision Tape shows one decision well but explains nothing before a case is open |
 | FR-17 | Batch Evidence screen | **OUT OF SCOPE (Sep 2 replan)** — cut for time; the A/B/C table moves into README.md as markdown instead |
 | FR-18 | Exception list surfaced, not hidden | Reachable in one click from the deck |
 
@@ -85,6 +86,15 @@ FR-19 Rulebook screen · FR-20 live Razorpay execution toggle · FR-21 payday in
 **All of FR-19–FR-24 are OUT OF SCOPE for this submission (Sep 2 replan)** —
 the compressed 3-day timeline (§11) has no room past the P0 gates, executor,
 and eval core; none of the six is required for the compliance thesis.
+
+**FR-19 partially restored, day 6 (Sep 3).** Not the standalone Rulebook
+screen, which stays cut. `GET /rulebook` already existed and already
+introspected the live gate modules; section 03 of the new `#/how-it-works`
+explainer renders it. The cost was a component, not a phase, and it buys the
+thing FR-19 was for — a reader can see all eleven gates with their clause
+references and rule text without opening the repo. What is still missing
+against FR-19's original acceptance is the policy YAML rendered rule by rule
+with each `because`; the endpoint serves it and no screen shows it yet.
 
 FR-28 Reconciliation sweep — periodic poll of subscription state for drift (status, `paid_count`) no webhook explained; opens a case from the discrepancy. Found necessary on day 1: a mandate-authentication attempt above an undocumented Razorpay test-mode amount ceiling is rejected before any payment entity exists, so it fires **no webhook at all** — not `payment.failed`, nothing. Salvage is entirely webhook-driven, so this class of failure is otherwise invisible to it: money can leak with zero audit trail, in exactly the system whose thesis is an auditable record of every money-relevant event. Shares machinery with the in-doubt reconciliation path in the executor phase (now out of scope, above) rather than being a separate subsystem. Logged, not built, for this submission — but named explicitly in `LIMITATIONS.md` rather than left implicit.
 
@@ -541,7 +551,10 @@ why: NOTES.md, 2026-09-02 entry.
 **Cut for this submission — marked here so their absence isn't unexplained
 drift, not deleted from scope (see §6 for the full list with reasons):**
 S3 Batch Evidence screen (the A/B/C comparison table moves into README.md as
-markdown instead), P1 features FR-19–FR-24, P2 features FR-25–FR-27, the
+markdown instead — and, from day 6, into `#/how-it-works` section 05, which
+renders the harness's own `finding` strings from `/metrics/batch`; the two
+charts S3 called for are still cut), P1 features FR-19–FR-24 (**except the
+partial FR-19 restoration noted in §6**), P2 features FR-25–FR-27, the
 20-seed/95%-CI eval protocol, and in-doubt reconciliation in the executor.
 The eval reports a range across seeds — "recovery held between X% and Y%
 across N independent runs" — never a confidence interval, and no copy

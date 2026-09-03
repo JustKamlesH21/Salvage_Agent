@@ -177,10 +177,23 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
   return (
     <div>
       <div className="border-b border-rule px-4 py-3">
-        <h1 className="font-display text-lead font-semibold tracking-tight">Command Deck</h1>
-        <p className="mt-0.5 text-data text-dim">
-          Every automated money decision, and every one the rules stopped.
-        </p>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+          <div>
+            <h1 className="font-display text-lead font-semibold tracking-tight">Command Deck</h1>
+            <p className="mt-0.5 text-data text-dim">
+              Every automated money decision, and every one the rules stopped.
+            </p>
+          </div>
+          {/* FR-18: one click from the deck, not behind a tab. */}
+          <nav className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <a href="#/exceptions" className="eyebrow hover:text-ink hover:underline">
+              Exception desk
+            </a>
+            <a href="#/how-it-works" className="eyebrow hover:text-ink hover:underline">
+              How it works
+            </a>
+          </nav>
+        </div>
       </div>
 
       {error ? (

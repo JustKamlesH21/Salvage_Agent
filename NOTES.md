@@ -1654,3 +1654,16 @@ was 10–11px, under the 12px floor and hard to read in a 1080p recording; there
 is a type scale now. At 375px the page itself scrolled sideways, because a
 clause ref and an action name are single unbreakable tokens in a mono face —
 `.data` now reflows them, and the four-width check is in the verification list.
+
+**And one gap the redesign found by reading `VIDEO.md` against the code.** The
+4:15 beat says *"Show `/exceptions`"*, and `PRD.md` FR-18 — a **P0** row — asks
+for the exception list "reachable in one click from the deck". `GET /exceptions`
+has been live since day 5 with a docstring quoting FR-18 at itself. No screen
+consumed it. The video beat had raw JSON to point at. Built now as S5, and
+built from two sources rather than one: `SALVAGE_SPEC` §6.5 defines the desk as
+*"ESCALATE_HUMAN and UNKNOWN cases"*, which live in `cases`, while the
+`exceptions` collection only ever holds `PIPELINE_FAILED` and
+`CHAIN_APPEND_EXHAUSTED`. Rendering only the endpoint named `/exceptions` would
+have shown an empty table and called it the exception desk. They are different
+kinds of event — one is the agent working, one is the agent broken — so they
+are two tables with the distinction written on the page.
