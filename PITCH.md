@@ -41,19 +41,47 @@ cd web && npm run dev &
 
 **3. Open a tunnel so Razorpay can reach your laptop**
 
+You have done this before, and the webhook you created in Razorpay is still
+there. What does *not* survive is the URL: on ngrok's free plan a new address is
+issued every time the agent starts, so the one saved in `.env`
+(`69c8-223-181-12-125…`) is already dead. That is why this step exists at all.
+
+**Do this once and it stops being a step.** ngrok's free plan includes one
+permanent domain:
+
+1. dashboard.ngrok.com → **Domains** → **Create Domain** (free tier allows one)
+2. Then always start the tunnel with that name:
+
 ```bash
-ngrok http 8000
+ngrok http 8000 --url=YOUR-NAME.ngrok-free.app
 ```
 
-Copy the `https://…ngrok-free.app` URL it prints.
+Now the address never changes, and step 4 is a one-time job forever.
 
-**4. Point Razorpay at it**
+*Without a reserved domain* it is `ngrok http 8000`, and you copy the new
+`https://…ngrok-free.app` it prints **every single time** — and edit it into
+Razorpay again. That is the thing worth spending five minutes to kill.
 
-In **Razorpay** → Settings → Webhooks → Add New Webhook:
+**4. Point Razorpay at it — once, if you did step 3 properly**
 
-- URL: `<your ngrok url>/webhooks/razorpay`
-- Secret: the same value as `RAZORPAY_WEBHOOK_SECRET` in your `.env`
-- Tick only: **`payment.failed`**
+In **Razorpay** → Settings → Webhooks:
+
+- **If you already have a Salvage webhook:** open it and just correct the URL.
+  Do not create a second one — Razorpay will happily deliver to both, and you
+  will spend the demo wondering why one event opened two cases.
+- **If not, Add New Webhook:**
+  - URL: `<your ngrok url>/webhooks/razorpay`
+  - Secret: the same value as `RAZORPAY_WEBHOOK_SECRET` in your `.env`
+  - Tick only: **`payment.failed`**
+
+**Check it before you trust it.** With the tunnel up:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://YOUR-NAME.ngrok-free.app/health
+```
+
+`200` means Razorpay can reach you. `404` means the tunnel is dead or the URL is
+stale — which is exactly what had happened to the one in `.env`.
 
 **5. Make a Payment Link you will use on camera**
 
