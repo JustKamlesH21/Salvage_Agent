@@ -1,0 +1,442 @@
+<title>Salvage Decision Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Martian+Mono:wght@300;400;500;600&family=Public+Sans:ital,wght@0,300..700;1,400&display=swap">
+
+<style>
+  /* Salvage's own tokens — SALVAGE_SPEC §6.2, unchanged. The subject is Indian
+     regulated payments: mandate ledgers, RBI circulars, clause numbers, stamped
+     approvals. Deliberately single-theme: this is a paper document, and paper
+     does not have a dark mode. Every colour is painted explicitly so the page
+     holds on any host ground. */
+  :root {
+    --ink: #12263a;
+    --paper: #fbfaf7;
+    --rule: #d6d2c8;
+    --stamp: #b3261e;
+    --ledger: #1f6f4a;
+    --amber: #b26b00;
+    --dim: #6b7a88;
+    --wash: #ffffff;
+
+    --display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+    --body: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+    --data: 'Martian Mono', ui-monospace, 'SF Mono', monospace;
+
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 18px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  /* Each section is sized to sit comfortably in a 1080p frame when the
+     presenter scrolls to it. Nothing is hidden until scrolled. */
+  section {
+    padding: 72px 0;
+    border-top: 1px solid var(--rule);
+  }
+  section:first-of-type { border-top: 0; }
+
+  .eyebrow {
+    font-family: var(--data);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin: 0 0 14px;
+  }
+
+  h1 {
+    font-family: var(--display);
+    font-size: clamp(38px, 5.2vw, 62px);
+    line-height: 1.02;
+    letter-spacing: -0.022em;
+    font-weight: 700;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+
+  h2 {
+    font-family: var(--display);
+    font-size: clamp(27px, 3.1vw, 38px);
+    line-height: 1.12;
+    letter-spacing: -0.016em;
+    font-weight: 650;
+    margin: 0 0 16px;
+    max-width: 22ch;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: var(--data);
+    font-size: 13px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+    font-weight: 500;
+    margin: 0 0 10px;
+  }
+
+  p { margin: 0 0 16px; max-width: 66ch; }
+  .lede { font-size: 21px; line-height: 1.5; color: var(--ink); }
+  .quiet { color: var(--dim); }
+  .data { font-family: var(--data); font-variant-numeric: tabular-nums; }
+
+  strong { font-weight: 650; }
+
+  /* The one bold element, per §6.2: an impression pressed onto the page. */
+  .stamp {
+    display: inline-block;
+    font-family: var(--data);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--stamp);
+    border: 1.5px solid var(--stamp);
+    box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4.5px var(--stamp);
+    padding: 4px 9px;
+    background: color-mix(in srgb, var(--stamp) 5%, transparent);
+    transform: rotate(-2.6deg);
+    opacity: 0.92;
+  }
+
+  .struck {
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--stamp) 70%, transparent);
+    text-decoration-thickness: 1.5px;
+    opacity: 0.6;
+  }
+
+  figure { margin: 0; }
+  .scroll { overflow-x: auto; padding-bottom: 4px; }
+  svg { display: block; max-width: 100%; height: auto; }
+
+  /* ── The pipeline rail ─────────────────────────────────────────────── */
+  .stages {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+    gap: 10px;
+    margin: 0 0 22px;
+    padding: 0;
+    list-style: none;
+  }
+  .stage {
+    border: 1px solid var(--rule);
+    background: var(--wash);
+    padding: 14px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .stage .n {
+    font-family: var(--data);
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+  }
+  .stage .name { font-family: var(--data); font-size: 15px; font-weight: 500; }
+  .stage .note { font-size: 14px; line-height: 1.45; color: var(--dim); }
+  .stage.llm { border-color: var(--ink); border-width: 2px; }
+  .stage.money { border-color: var(--stamp); border-width: 2px; }
+
+  .boundaries {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+    gap: 20px;
+    margin-top: 26px;
+  }
+  .boundary { border-left: 3px solid var(--ink); padding-left: 16px; }
+  .boundary.red { border-left-color: var(--stamp); }
+  .boundary p { margin: 6px 0 0; font-size: 15.5px; line-height: 1.5; color: var(--dim); }
+  .boundary .claim { font-family: var(--data); font-size: 15px; color: var(--ink); font-weight: 500; }
+
+  /* ── The gate rail ─────────────────────────────────────────────────── */
+  .gates { border: 1px solid var(--rule); background: var(--wash); }
+  .gate {
+    display: grid;
+    grid-template-columns: 46px minmax(112px, auto) minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: baseline;
+    padding: 11px 16px;
+    border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent);
+  }
+  .gate:last-child { border-bottom: 0; }
+  .gate .id { font-family: var(--data); font-size: 13px; color: var(--dim); }
+  .gate .nm { font-family: var(--data); font-size: 15px; font-weight: 500; }
+  .gate .rl { font-size: 14.5px; line-height: 1.45; color: var(--dim); }
+  .gate .vd { font-family: var(--data); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+  .vd.block { color: var(--stamp); }
+  .vd.replan { color: var(--amber); }
+  .vd.allow { color: var(--ledger); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 18px; font-size: 14.5px; color: var(--dim); }
+  .legend span { display: inline-flex; align-items: baseline; gap: 8px; }
+  .swatch { width: 11px; height: 11px; border: 1.5px solid currentColor; display: inline-block; }
+
+  /* ── Claim / no-claim ──────────────────────────────────────────────── */
+  .claims { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0; border: 1px solid var(--rule); }
+  .claims > div { padding: 22px 24px; border-right: 1px solid var(--rule); background: var(--wash); }
+  .claims > div:last-child { border-right: 0; }
+  .claims .fig { font-family: var(--data); font-size: 25px; font-weight: 500; letter-spacing: -0.01em; margin: 6px 0 8px; }
+  .claims p { font-size: 15px; line-height: 1.5; color: var(--dim); margin: 0; }
+  .fig.good { color: var(--ledger); }
+  .fig.bad { color: var(--stamp); }
+  .fig.flat { color: var(--ink); }
+
+  footer { border-top: 1px solid var(--rule); padding: 34px 0 56px; }
+  footer p { font-family: var(--data); font-size: 13px; color: var(--dim); line-height: 1.7; max-width: 78ch; }
+
+  @media (max-width: 640px) {
+    body { font-size: 17px; }
+    .sheet { padding: 0 20px; }
+    section { padding: 52px 0; }
+    .gate { grid-template-columns: 40px 1fr; }
+    .gate .rl, .gate .vd { grid-column: 2; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+
+<div class="sheet">
+
+  <section>
+    <p class="eyebrow">Razorpay Buildathon · Track 03</p>
+    <h1>What happens between a failed charge and a cancelled subscription</h1>
+    <p class="lede">Razorpay retries a failed mandate three times on a fixed schedule and then halts it.
+      Salvage is the decision layer in that gap: it works out <em>why</em> the charge failed, chooses
+      what to do about it, and forces every money action through eleven compliance gates before
+      anything reaches a customer.</p>
+    <p class="quiet">Every gate cites the clause it enforces. Every refusal is written to an append-only,
+      hash-chained audit trail. One file in the codebase is allowed to import the Razorpay SDK, and the
+      build fails if a second one ever does.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">The problem</p>
+    <h2>Four blind attempts, all on the same clock</h2>
+    <p>A mandate charge fails on the 28th. The customer's salary lands on the 1st. Razorpay's
+      subscription retry does not know that, because it does not know anything about the failure —
+      it fires at T+1, T+2 and T+3, same time of day, whether the card is dead or the account is
+      three days from payday. After the third, the subscription moves to <span class="data">halted</span>.</p>
+
+    <figure class="scroll">
+      <svg viewBox="0 0 1080 300" role="img" aria-label="Razorpay retries at T+1, T+2 and T+3 on a fixed schedule and then halts the subscription. Salvage places one diagnosed attempt at the next payday window instead, which does not consume the retry budget.">
+        <line x1="60" y1="150" x2="1020" y2="150" stroke="#d6d2c8" stroke-width="1"/>
+
+        <g font-family="Martian Mono, monospace" font-size="13" fill="#12263a">
+          <text x="60" y="34">RAZORPAY — three blind retries, fixed schedule</text>
+        </g>
+
+        <!-- the failure -->
+        <rect x="62" y="134" width="30" height="30" fill="none" stroke="#b3261e" stroke-width="2"/>
+        <g font-family="Martian Mono, monospace" font-size="13">
+          <text x="62" y="196" fill="#b3261e">charge fails</text>
+          <text x="62" y="216" fill="#6b7a88">28th · T = 0</text>
+        </g>
+
+        <!-- the ladder -->
+        <g font-family="Martian Mono, monospace" font-size="13" fill="#6b7a88">
+          <line x1="290" y1="82" x2="290" y2="150" stroke="#d6d2c8" stroke-width="1" stroke-dasharray="2 4"/>
+          <rect x="275" y="62" width="30" height="30" fill="none" stroke="#12263a" stroke-width="2"/>
+          <text x="275" y="50">T+1</text>
+
+          <line x1="480" y1="82" x2="480" y2="150" stroke="#d6d2c8" stroke-width="1" stroke-dasharray="2 4"/>
+          <rect x="465" y="62" width="30" height="30" fill="none" stroke="#12263a" stroke-width="2"/>
+          <text x="465" y="50">T+2</text>
+
+          <line x1="670" y1="82" x2="670" y2="150" stroke="#d6d2c8" stroke-width="1" stroke-dasharray="2 4"/>
+          <rect x="655" y="62" width="30" height="30" fill="none" stroke="#12263a" stroke-width="2"/>
+          <text x="655" y="50">T+3</text>
+        </g>
+
+        <!-- halted -->
+        <rect x="960" y="134" width="30" height="30" fill="#b3261e" fill-opacity="0.14" stroke="#b3261e" stroke-width="2"/>
+        <g font-family="Martian Mono, monospace" font-size="13">
+          <text x="905" y="196" fill="#b3261e">halted · churned</text>
+        </g>
+
+        <!-- salvage's insert -->
+        <g font-family="Martian Mono, monospace" font-size="13">
+          <line x1="800" y1="150" x2="800" y2="232" stroke="#1f6f4a" stroke-width="1" stroke-dasharray="2 4"/>
+          <rect x="785" y="232" width="30" height="30" fill="#1f6f4a" fill-opacity="0.14" stroke="#1f6f4a" stroke-width="2"/>
+          <text x="60" y="252" fill="#1f6f4a">SALVAGE — one diagnosed attempt, placed at the next payday window</text>
+          <text x="60" y="276" fill="#6b7a88">a manual charge on an issued invoice does not consume the auto-retry budget</text>
+        </g>
+      </svg>
+    </figure>
+
+    <p>The lever is documented, not clever. Razorpay's own docs state that a manual charge attempt on an
+      <span class="data">issued</span> invoice does not count toward a subscription's remaining retries.
+      So a precisely-timed attempt can be added <em>on top of</em> the safety net rather than spending it.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">The pipeline</p>
+    <h2>Diagnose with a model. Decide with code.</h2>
+    <p>Six stages between the webhook and the money. The model appears in exactly one of them, and it
+      does not get a vote on what happens next.</p>
+
+    <ol class="stages">
+      <li class="stage"><span class="n">01</span><span class="name">Event</span><span class="note">HMAC verified on the raw body, then appended to a hash-chained log</span></li>
+      <li class="stage"><span class="n">02</span><span class="name">Normalise</span><span class="note">114 taxonomy rules → one of nine failure classes. No model, no I/O</span></li>
+      <li class="stage llm"><span class="n">03</span><span class="name">Diagnose</span><span class="note">The LLM. Returns a diagnosis and nothing else</span></li>
+      <li class="stage"><span class="n">04</span><span class="name">Policy</span><span class="note">11 rules, priority-ordered, first match wins. Each cites a source</span></li>
+      <li class="stage money"><span class="n">05</span><span class="name">Gates</span><span class="note">All eleven, in order, every time — no short circuit</span></li>
+      <li class="stage money"><span class="n">06</span><span class="name">Execute</span><span class="note">Idempotency key and audit row written before dispatch</span></li>
+    </ol>
+
+    <div class="boundaries">
+      <div class="boundary">
+        <span class="claim">The LLM never chooses a money action.</span>
+        <p>Where the deterministic normaliser produced anything but <span class="data">UNKNOWN</span>,
+          the normaliser wins — and it almost always does. Across the whole evaluation the model drove
+          <strong>6 of 623</strong> decisions. Its prompt context has no field for a name, a contact,
+          an email or an amount, so leaking one is a type error rather than an oversight.</p>
+      </div>
+      <div class="boundary red">
+        <span class="claim">One file may import the Razorpay SDK.</span>
+        <p><span class="data">api/executor/client.py</span>, and the build fails if a second one ever
+          does. Everything else goes through <span class="data">execute_action()</span>, which writes
+          its audit row <em>before</em> it dispatches, so a crash mid-flight leaves a record rather
+          than a mystery.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">The gate chain</p>
+    <h2>Eleven gates, in order, every time</h2>
+    <p>Every proposed action is submitted to the whole chain before anything is dispatched. There is no
+      flag, config value or argument that reorders or skips any of them, and
+      <span class="data">G0_KILL</span> is always first.</p>
+
+    <div class="gates">
+      <div class="gate"><span class="id">G0</span><span class="nm">KILL</span><span class="rl">Kill switch engaged → nothing dispatches, of any kind</span><span class="vd block">block</span></div>
+      <div class="gate"><span class="id">G1</span><span class="nm">WINDOW</span><span class="rl">Customer contact only 08:00–19:00 IST, every channel</span><span class="vd replan">defer</span></div>
+      <div class="gate"><span class="id">G2</span><span class="nm">PREDEBIT</span><span class="rl">No auto-debit without a pre-transaction notice ≥ 24h prior</span><span class="vd block">block</span></div>
+      <div class="gate"><span class="id">G3</span><span class="nm">AFA</span><span class="rl">No-AFA auto-debit ≤ ₹15,000 — ₹1,00,000 for insurance, mutual funds, card bills</span><span class="vd block">block</span></div>
+      <div class="gate"><span class="id">G4</span><span class="nm">BUDGET</span><span class="rl">Max 4 Salvage attempts per case per 14 days, on top of Razorpay's three</span><span class="vd replan">defer</span></div>
+      <div class="gate"><span class="id">G5</span><span class="nm">COOLDOWN</span><span class="rl">≥ 48h between contacts, ≤ 3 contacts in any 7 days</span><span class="vd replan">defer</span></div>
+      <div class="gate"><span class="id">G6</span><span class="nm">OPTOUT</span><span class="rl">Opt-out is permanent and immediate</span><span class="vd block">block</span></div>
+      <div class="gate"><span class="id">G7</span><span class="nm">THIRDPARTY</span><span class="rl">Never contact an employer, relative or neighbour</span><span class="vd block">block</span></div>
+      <div class="gate"><span class="id">G8</span><span class="nm">POSTDEBIT</span><span class="rl">No charge to a customer who cannot be sent the confirmation afterwards</span><span class="vd block">block</span></div>
+      <div class="gate"><span class="id">G9</span><span class="nm">HALTED</span><span class="rl">No auto-charge on a halted subscription</span><span class="vd block">block</span></div>
+      <div class="gate"><span class="id">G10</span><span class="nm">IDEMPOTENT</span><span class="rl">Refuse any action whose idempotency key already exists</span><span class="vd block">block</span></div>
+    </div>
+
+    <div class="legend">
+      <span><i class="swatch" style="color:#1f6f4a"></i> allow — proceed</span>
+      <span><i class="swatch" style="color:#b26b00"></i> defer — lawful later, rescheduled</span>
+      <span><i class="swatch" style="color:#b3261e"></i> block — refused, with the clause attached</span>
+    </div>
+
+    <p style="margin-top:26px">Authorities: RBI Fair Practices Code
+      (<span class="data">DOR.ORG.REC.65/21.04.158/2022-23</span>) for contact conduct; the Digital
+      Payments E-mandate Framework (<span class="data">RBI/DPSS/2026-27/396</span>) for notice, AFA,
+      opt-out and post-debit confirmation; card-network limits for the attempt budget.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">What makes it an agent and not a rules engine</p>
+    <h2>A refusal is not the end of the decision</h2>
+    <p>When a gate blocks something it can compensate for, Salvage substitutes the lawful action and
+      submits <em>that</em> to all eleven gates from scratch. One decision, two full chains.</p>
+
+    <figure class="scroll" style="margin: 24px 0 8px">
+      <svg viewBox="0 0 1080 220" role="img" aria-label="A proposed scheduled retry is refused by gates G2 and G3. Salvage substitutes a pre-debit notice and re-gates it through all eleven gates, which allow it. Twenty-two verdicts on one decision.">
+        <rect x="40" y="40" width="380" height="132" fill="#ffffff" stroke="#d6d2c8"/>
+        <g font-family="Martian Mono, monospace" font-size="13">
+          <text x="60" y="68" fill="#6b7a88">WHAT IT WANTED TO DO</text>
+          <text x="60" y="96" fill="#12263a" font-size="15">RETRY_SCHEDULED</text>
+          <text x="60" y="124" fill="#6b7a88">11 gates evaluated</text>
+          <text x="60" y="150" fill="#b3261e">⊘ refused by G2 and G3</text>
+        </g>
+
+        <g font-family="Martian Mono, monospace" font-size="12">
+          <line x1="440" y1="106" x2="620" y2="106" stroke="#12263a" stroke-width="1.5"/>
+          <polygon points="620,106 610,101 610,111" fill="#12263a"/>
+          <text x="452" y="96" fill="#b3261e">G2_PREDEBIT</text>
+          <text x="452" y="128" fill="#6b7a88">supplies the remedy</text>
+        </g>
+
+        <rect x="640" y="40" width="380" height="132" fill="#ffffff" stroke="#d6d2c8"/>
+        <g font-family="Martian Mono, monospace" font-size="13">
+          <text x="660" y="68" fill="#6b7a88">WHAT IT DID INSTEAD</text>
+          <text x="660" y="96" fill="#12263a" font-size="15">SEND_PRE_DEBIT_NOTICE</text>
+          <text x="660" y="124" fill="#6b7a88">11 gates evaluated again</text>
+          <text x="660" y="150" fill="#1f6f4a">✓ allowed</text>
+        </g>
+
+        <text x="40" y="204" font-family="Martian Mono, monospace" font-size="13" fill="#12263a">22 gate verdicts on one decision — eleven for the retry, eleven for the notice</text>
+      </svg>
+    </figure>
+
+    <p style="margin-top:26px"><strong>And the verdict does not travel with the action.</strong> When a
+      deferred action finally comes due, the gate context is rebuilt from the database — the audit rows,
+      the contact history, the opt-out state — and all eleven gates run again against the world as it is
+      at that moment. A retry scheduled at a compliant hour that comes due at 19:32 is refused at 19:32.
+      Compliance that is only checked at scheduling time is not compliance.</p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Results · 40 mandates, 3 seeds, 3 arms</p>
+    <h2>What we claim, and what we don't</h2>
+
+    <div class="claims">
+      <div>
+        <h3>Net recovery</h3>
+        <p class="fig flat">Not distinguishable</p>
+        <p>Salvage does not recover more money than three blind retries. A ±20% change to the simulator's
+          calibration reverses the ranking, so no uplift is claimed anywhere.</p>
+      </div>
+      <div>
+        <h3>Attempts per recovery</h3>
+        <p class="fig good">2.89–3.39</p>
+        <p>Against the baseline's 4.09–5.30 — comparable recovery for about 35% fewer attempts, on every
+          seed.</p>
+      </div>
+      <div>
+        <h3>Wasted on dead cards</h3>
+        <p class="fig good">0 <span style="color:var(--dim);font-size:16px">vs 30 per run</span></p>
+        <p>The baseline retries hard declines three times each because it does not know what it is
+          retrying. Salvage spends nothing on them.</p>
+      </div>
+      <div>
+        <h3>Contacts outside 08:00–19:00 IST</h3>
+        <p class="fig good">0 <span style="color:var(--dim);font-size:16px">vs 19–29 per run</span></p>
+        <p>Audited from the record of what was dispatched and when — not from the gate verdicts that
+          were supposed to guarantee it.</p>
+      </div>
+    </div>
+
+    <p style="margin-top:24px" class="quiet">Reported as a range across seeds, never a confidence
+      interval: N=3 does not support one. Outcomes come from a simulator whose every parameter is
+      sourced and none of which is measured, because Razorpay test mode reproduced one of 110 published
+      decline reasons. That is stated in <span class="data">LIMITATIONS.md</span> rather than left for
+      someone to find.</p>
+  </section>
+
+  <footer>
+    <p>Timestamps stored UTC · gate logic evaluated IST · zone always rendered.
+      Events and audit are append-only and hash-chained — tamper-evident, not tamper-proof.
+      Live dispatch is deliberately not built: every figure here is dry-run.</p>
+  </footer>
+
+</div>

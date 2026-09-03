@@ -171,11 +171,18 @@ def cmd_cohort(args: argparse.Namespace, url: str, secret: str) -> int:
 
 
 def cmd_one(args: argparse.Namespace, url: str, secret: str) -> int:
-    status, body = post(
-        url, _event(args.reason, args.method, args.amount, suffix=_suffix()), secret
-    )
-    print(status, body)
-    return 0 if status == 200 else 1
+    suffix = _suffix()
+
+    async def run() -> int:
+        if not args.no_customer:
+            await _ensure_customer(f"cust_demo{suffix}")
+        status, body = post(
+            url, _event(args.reason, args.method, args.amount, suffix=suffix), secret
+        )
+        print(f"{status} {body}   sub_demo{suffix}")
+        return 0 if status == 200 else 1
+
+    return asyncio.run(run())
 
 
 def cmd_soon(args: argparse.Namespace, url: str, secret: str) -> int:
@@ -271,6 +278,7 @@ def main() -> int:
     o.add_argument("--reason", default="insufficient_funds")
     o.add_argument("--method", default="card")
     o.add_argument("--amount", type=int, default=1_800_000, help="paise")
+    o.add_argument("--no-customer", action="store_true", help="skip seeding the customer record")
     o.set_defaults(fn=cmd_one)
 
     s = sub.add_parser("soon", help="post a case that comes due in a few minutes")
