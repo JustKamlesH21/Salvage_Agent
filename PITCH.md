@@ -41,47 +41,50 @@ cd web && npm run dev &
 
 **3. Open a tunnel so Razorpay can reach your laptop**
 
-You have done this before, and the webhook you created in Razorpay is still
-there. What does *not* survive is the URL: on ngrok's free plan a new address is
-issued every time the agent starts, so the one saved in `.env`
-(`69c8-223-181-12-125…`) is already dead. That is why this step exists at all.
+The webhook you created in Razorpay is still there — you do not make it again.
+What does not survive is the *address*: on ngrok's free plan a new one is issued
+on every start, so the URL saved in `.env` was already dead.
 
-**Do this once and it stops being a step.** ngrok's free plan includes one
-permanent domain:
+Fix it once:
 
-1. dashboard.ngrok.com → **Domains** → **Create Domain** (free tier allows one)
-2. Then always start the tunnel with that name:
+1. **dashboard.ngrok.com → Domains → Create Domain.** Free plan includes exactly
+   one. Take whatever name it offers — you will never type it again.
+2. Put it in `.env`:
+
+   ```
+   PUBLIC_WEBHOOK_URL=https://<that-domain>
+   ```
+
+3. From then on, every time:
+
+   ```bash
+   make tunnel
+   ```
+
+   It reads the domain from `.env` and always asks ngrok for the same one, so
+   the address never changes again.
+
+*(No reserved domain? `ngrok http 8000` works, but the address changes on every
+restart and you re-edit Razorpay each time. Worth the five minutes to avoid.)*
+
+**4. Point Razorpay at it — once**
+
+**Razorpay → Settings → Webhooks.** You already have a Salvage webhook: **open
+it and correct the URL.** Do not add a second one — Razorpay delivers to both,
+and one failed payment would open two cases in the middle of your demo.
+
+- URL: `https://<your-domain>/webhooks/razorpay`
+- Secret: the same value as `RAZORPAY_WEBHOOK_SECRET` in your `.env`
+- Events: **`payment.failed`** only
+
+Check it before you trust it, with the tunnel up:
 
 ```bash
-ngrok http 8000 --url=YOUR-NAME.ngrok-free.app
+curl -s -o /dev/null -w '%{http_code}\n' https://<your-domain>/health
 ```
 
-Now the address never changes, and step 4 is a one-time job forever.
-
-*Without a reserved domain* it is `ngrok http 8000`, and you copy the new
-`https://…ngrok-free.app` it prints **every single time** — and edit it into
-Razorpay again. That is the thing worth spending five minutes to kill.
-
-**4. Point Razorpay at it — once, if you did step 3 properly**
-
-In **Razorpay** → Settings → Webhooks:
-
-- **If you already have a Salvage webhook:** open it and just correct the URL.
-  Do not create a second one — Razorpay will happily deliver to both, and you
-  will spend the demo wondering why one event opened two cases.
-- **If not, Add New Webhook:**
-  - URL: `<your ngrok url>/webhooks/razorpay`
-  - Secret: the same value as `RAZORPAY_WEBHOOK_SECRET` in your `.env`
-  - Tick only: **`payment.failed`**
-
-**Check it before you trust it.** With the tunnel up:
-
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' https://YOUR-NAME.ngrok-free.app/health
-```
-
-`200` means Razorpay can reach you. `404` means the tunnel is dead or the URL is
-stale — which is exactly what had happened to the one in `.env`.
+`200` means Razorpay can reach you. `404` means the tunnel is down or the URL is
+stale — which is exactly the state the old one was in.
 
 **5. Make a Payment Link you will use on camera**
 
