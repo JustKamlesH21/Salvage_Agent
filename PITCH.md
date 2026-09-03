@@ -86,10 +86,32 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<your-domain>/health
 `200` means Razorpay can reach you. `404` means the tunnel is down or the URL is
 stale — which is exactly the state the old one was in.
 
-**5. Make a Payment Link you will use on camera**
+**5. The Payment Link you will use on camera**
 
-In **Razorpay** → Payment Links → Create Payment Link. Any amount, ₹499 is fine.
-Keep the link open in a tab. *(You get 30 links per test account. One is plenty.)*
+Already made, ₹499, live now:
+
+```
+https://rzp.io/rzp/Ni3ZQiC
+```
+
+Keep it open in a tab. It is recorded in `.razorpay-manifest.json` alongside
+its `plink_` id, so it is findable if the tab closes.
+
+If you ever need another, create it through the API rather than the Dashboard —
+the Dashboard form is fussier and the API takes one call:
+
+```bash
+.venv/bin/python -c "
+from api.executor.client import get_razorpay_client
+print(get_razorpay_client().payment_link.create({
+  'amount': 49900, 'currency': 'INR', 'accept_partial': False,
+  'description': 'Salvage demo',
+  'notify': {'sms': False, 'email': False}, 'reminder_enable': False,
+})['short_url'])"
+```
+
+`notify` is off on purpose: nothing is sent to a real phone or inbox.
+**You get 30 links per test account, ever.** One is plenty.
 
 ### Test card details
 
