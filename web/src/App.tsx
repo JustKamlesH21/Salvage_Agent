@@ -62,7 +62,7 @@ export default function App() {
         )}
       </main>
       <footer className="mx-auto max-w-6xl border-t border-rule px-4 py-4">
-        <p className="data text-[10px] leading-relaxed text-dim">
+        <p className="data text-data-sm leading-relaxed text-dim">
           Timestamps stored UTC, rendered IST. Gates evaluate in IST. Dry run unless the
           bar says otherwise — and live dispatch is not built in this submission.
         </p>

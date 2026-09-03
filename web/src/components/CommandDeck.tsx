@@ -25,10 +25,10 @@ function Counter({
   return (
     <div className="border-rule px-4 py-4 not-last:border-b sm:not-last:border-r sm:not-last:border-b-0">
       <div className="eyebrow">{label}</div>
-      <div className={`font-display mt-1.5 text-[26px] leading-none font-semibold tabular-nums ${tone}`}>
+      <div className={`font-display mt-1.5 text-figure leading-none font-semibold tabular-nums ${tone}`}>
         {value}
       </div>
-      {sub ? <div className="data mt-1.5 text-[10px] text-dim">{sub}</div> : null}
+      {sub ? <div className="data mt-1.5 text-data-sm text-dim">{sub}</div> : null}
     </div>
   )
 }
@@ -51,7 +51,7 @@ function ClassBars({ cases }: { cases: CaseSummary[] }) {
 
   if (rows.length === 0) {
     return (
-      <p className="px-4 py-6 text-[12px] text-dim">
+      <p className="px-4 py-6 text-data text-dim">
         No classified cases yet. Send a <span className="data">payment.failed</span> webhook
         and the classes will appear here as cases open.
       </p>
@@ -76,9 +76,9 @@ function ClassBars({ cases }: { cases: CaseSummary[] }) {
               />
             ))}
           </span>
-          <span className="data min-w-0 flex-1 truncate text-[11px]">{row.name}</span>
-          <span className="data shrink-0 text-[11px] text-dim">{row.total} cases</span>
-          <span className="data w-12 shrink-0 text-right text-[11px]">
+          <span className="data min-w-0 flex-1 truncate text-data">{row.name}</span>
+          <span className="data shrink-0 text-data text-dim">{row.total} cases</span>
+          <span className="data w-12 shrink-0 text-right text-data">
             {percent(row.rate, 0)}
           </span>
         </div>
@@ -90,7 +90,7 @@ function ClassBars({ cases }: { cases: CaseSummary[] }) {
 function Feed({ items, onOpen }: { items: FeedItem[]; onOpen: (id: string) => void }) {
   if (items.length === 0) {
     return (
-      <p className="px-4 py-6 text-[12px] text-dim">
+      <p className="px-4 py-6 text-data text-dim">
         Listening. Decisions appear here the moment a webhook arrives — nothing has come
         through yet.
       </p>
@@ -107,17 +107,17 @@ function Feed({ items, onOpen }: { items: FeedItem[]; onOpen: (id: string) => vo
           className="block w-full px-4 py-2.5 text-left hover:bg-white/60"
         >
           <div className="flex items-baseline gap-2">
-            <span className="data text-[10px] text-dim">{ago(item.at)}</span>
-            <span className="data truncate text-[11px]">case {item.case_id.slice(-6)}</span>
+            <span className="data text-data-sm text-dim">{ago(item.at)}</span>
+            <span className="data truncate text-data">case {item.case_id.slice(-6)}</span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
             <span
-              className={`data text-[11px] ${
+              className={`data text-data ${
                 item.verdict === 'allow'
-                  ? 'text-ledger'
+                  ? 'text-allow'
                   : item.verdict === 'replan'
                     ? 'text-amber'
-                    : 'text-stamp'
+                    : 'text-block'
               }`}
             >
               {item.action}
@@ -128,7 +128,7 @@ function Feed({ items, onOpen }: { items: FeedItem[]; onOpen: (id: string) => vo
               </span>
             ))}
             {item.blocked_by.length > 2 ? (
-              <span className="data text-[10px] text-dim">
+              <span className="data text-data-sm text-dim">
                 +{item.blocked_by.length - 2}
               </span>
             ) : null}
@@ -177,14 +177,14 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
   return (
     <div>
       <div className="border-b border-rule px-4 py-3">
-        <h1 className="font-display text-[19px] font-semibold tracking-tight">Command Deck</h1>
-        <p className="mt-0.5 text-[12px] text-dim">
+        <h1 className="font-display text-lead font-semibold tracking-tight">Command Deck</h1>
+        <p className="mt-0.5 text-data text-dim">
           Every automated money decision, and every one the rules stopped.
         </p>
       </div>
 
       {error ? (
-        <p className="border-b border-stamp bg-stamp/5 px-4 py-2.5 text-[12px] text-stamp">
+        <p className="border-b border-stamp bg-stamp/5 px-4 py-2.5 text-data text-block">
           The API is not answering ({error}). Start it with{' '}
           <span className="data">make dev</span> and this will fill in.
         </p>
@@ -200,7 +200,7 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
           label="Recovered"
           value={rupees(counters?.recovered_paise ?? 0)}
           sub={percent(counters?.recovery_rate ?? 0)}
-          tone="text-ledger"
+          tone="text-allow"
         />
         <Counter
           label="In flight"
@@ -211,7 +211,7 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
           label="Blocked by compliance"
           value={String(counters?.blocked_by_compliance ?? 0)}
           sub="actions a clause stopped"
-          tone="text-stamp"
+          tone="text-block"
         />
       </section>
 
@@ -230,7 +230,7 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
       <section className="border-t border-rule">
         <h2 className="eyebrow border-b border-rule px-4 py-2">Cases</h2>
         {cases.length === 0 ? (
-          <p className="px-4 py-6 text-[12px] text-dim">
+          <p className="px-4 py-6 text-data text-dim">
             No cases yet. Post a <span className="data">payment.failed</span> webhook to{' '}
             <span className="data">/webhooks/razorpay</span> and one opens here.
           </p>
@@ -252,25 +252,25 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
                   onClick={() => onOpenCase(item.id)}
                   className="cursor-pointer hover:bg-white/60"
                 >
-                  <td className="data px-4 py-2 text-[11px]">{item.customer_ref}</td>
-                  <td className="data px-4 py-2 text-[11px]">{item.failure_class ?? '—'}</td>
-                  <td className="data hidden px-4 py-2 text-[11px] sm:table-cell">
+                  <td className="data px-4 py-2 text-data">{item.customer_ref}</td>
+                  <td className="data px-4 py-2 text-data">{item.failure_class ?? '—'}</td>
+                  <td className="data hidden px-4 py-2 text-data sm:table-cell">
                     <span
                       className={
                         item.final_verdict === 'allow'
-                          ? 'text-ledger'
+                          ? 'text-allow'
                           : item.final_verdict === 'replan'
                             ? 'text-amber'
-                            : 'text-stamp'
+                            : 'text-block'
                       }
                     >
                       {item.final_action ?? '—'}
                     </span>
                   </td>
-                  <td className="data px-4 py-2 text-right text-[11px]">
+                  <td className="data px-4 py-2 text-right text-data">
                     {rupeesBare(item.amount_paise)}
                   </td>
-                  <td className="data hidden px-4 py-2 text-[10px] text-dim md:table-cell">
+                  <td className="data hidden px-4 py-2 text-data-sm text-dim md:table-cell">
                     {istStamp(item.opened_at)}
                   </td>
                 </tr>

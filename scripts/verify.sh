@@ -60,7 +60,7 @@ step "5  clauses"     "every gate cites; every rule explains" \
                       "$PY" scripts/check_clauses.py
 step "6  chain"       "event and audit hash chains intact" \
                       "$PY" scripts/verify_chain.py
-step "7  web"         "tsc --noEmit, eslint, vite build" \
+step "7  web"         "tsc --noEmit, lint, vitest, vite build" \
                       bash scripts/verify_web.sh
 
 printf '\n%s────────────────────────────────────────────────────────────%s\n' "$DIM" "$RESET"

@@ -1602,3 +1602,55 @@ channel on record, and a mandate customer without a contact cannot be sent the
 post-debit confirmation RBI requires. The cohort was wrong, the gate was
 right. `SyntheticCase.customer_document()` carries the reasoning so nobody
 deletes it later to make a number move.
+
+---
+
+## 2026-09-03 — day 6: the Decision Tape was rendering the remediation loop flat **demo**
+
+**What happened.** `resolve_with_remediation()` re-gates every substitute action
+through the whole eleven-gate chain and accumulates each pass into one flat
+`gate_results` array, so a decision that was refused once and remediated once
+carries twenty-two verdicts and not eleven — up to forty-four at
+`MAX_REMEDIATION_HOPS = 3`. `DecisionTape.tsx` mapped that array straight to
+rows and labelled it `Gates · 22 evaluated`. On screen: twenty-two
+undifferentiated rows in which `G0_KILL` appears twice, and nothing to say why.
+
+**Why it matters.** This is the shot `VIDEO.md` calls the signature one —
+*"eleven for the retry it wanted to make, eleven for the notice it made
+instead."* The structure that sentence describes was in the data the whole
+time and was being thrown away one layer from the screen. The tape was
+answering "which gates ran" when the interesting question is "what did it
+propose, what refused it, and what did it come back with".
+
+**How found.** Not by looking at the UI — it looked busy but plausible. By
+reading `api/gates/registry.py` while planning the redesign and noticing that
+the length of `gate_results` is not a constant. Same shape as the day-5
+entries: the code and the thing checking it shared an assumption.
+
+**Fix.** `web/src/lib/hops.ts` splits the array back into passes of eleven and
+`GateChain` / `RemediationTrail` render one card per pass with the causing gate
+drawn on the arrow between them. Seven tests in `hops.test.ts`.
+
+**A second one, found by running it against live data.** The first version of
+`splitHops` assumed `suppressed` carried one entry per hop. It does not — it
+carries one entry per *blocking gate*, so the ₹18,000 case has two entries
+(G2 and G3) for the same refused `RETRY_SCHEDULED`. The alignment check failed,
+`remediatedBy` came back null, and the remediation arrow silently did not draw:
+the component's whole reason for existing, absent, with no error anywhere. The
+unit test had passed because its fixture encoded the same wrong assumption as
+the code. Now derived from each hop's own verdicts — the first remediable
+blocker in chain order — with the remediable set supplied by `GET /rulebook`
+rather than copied into the frontend, and the real shape pinned as a
+regression test.
+
+*Class:* the recurring one in this log. A test written from the same
+misunderstanding as the code agrees with the code. Running it against a real
+decision is what disagreed.
+
+**Also closed.** The app was shipping Vite's purple lightning bolt as its
+favicon — the tab icon in every screenshot and every second of the recording.
+`recharts` was in `package.json` and imported nowhere. Body text in the tape
+was 10–11px, under the 12px floor and hard to read in a 1080p recording; there
+is a type scale now. At 375px the page itself scrolled sideways, because a
+clause ref and an action name are single unbreakable tokens in a mono face —
+`.data` now reflows them, and the four-width check is in the verification list.

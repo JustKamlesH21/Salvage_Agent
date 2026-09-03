@@ -13,9 +13,42 @@
   --color-amber: #b26b00;    /* REPLANNED, pending, scheduled */
   --color-dim: #6b7a88;      /* metadata, timestamps */
 
+  /* Verdict aliases onto the seven above. A gate row asks for the meaning, not
+     the colour — and colour is never the only carrier (every verdict also has a
+     mark and, when blocked, a strike). */
+  --color-allow: var(--color-ledger);
+  --color-block: var(--color-stamp);
+  --color-replan: var(--color-amber);
+
   --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
   --font-body: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
   --font-data: 'Martian Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* Type scale. Replaces the seven arbitrary bracket values that were scattered
+     through the components. Nothing here is smaller than 12px except the eyebrow,
+     which is a letterspaced label rather than reading matter — the tape has to be
+     legible in a 1080p recording, not just on the machine that built it. */
+  --text-eyebrow: 0.6875rem;   /* 11px */
+  --text-eyebrow--line-height: 1.4;
+  --text-eyebrow--letter-spacing: 0.18em;
+  --text-data-sm: 0.75rem;     /* 12px — clause refs, metadata */
+  --text-data-sm--line-height: 1.5;
+  --text-data: 0.8125rem;      /* 13px — gate names, amounts, ids */
+  --text-data--line-height: 1.5;
+  --text-body: 0.9375rem;      /* 15px — prose */
+  --text-body--line-height: 1.6;
+  --text-lead: 1.25rem;        /* 20px — explainer copy */
+  --text-lead--line-height: 1.4;
+  --text-figure: 1.75rem;      /* 28px — money counters */
+  --text-figure--line-height: 1.1;
+  --text-display: 2.375rem;    /* 38px — explainer headings */
+  --text-display--line-height: 1.05;
+
+  /* The tape's three columns have to move together or the spine detaches from
+     the chits. They were three hardcoded bracket values in two files. */
+  --spacing-gutter: 4.5rem;    /* time column */
+  --spacing-gutter-lg: 6rem;
+  --spacing-gate: 9rem;        /* gate name column */
 }
 
 html {
@@ -31,14 +64,20 @@ html {
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
+  /* Everything in this class is an identifier — SEND_PRE_DEBIT_NOTICE, a clause
+     ref, a class name — and identifiers have nothing to break on. Left alone
+     they push the page sideways at 375px. Amounts never reach the wrap point, so
+     the ledger column still lines up. */
+  overflow-wrap: anywhere;
 }
 
 /* A section label in the register of a printed form: small, letterspaced,
    with a rule that runs to the edge of the column. */
 .eyebrow {
   font-family: var(--font-data);
-  font-size: 0.625rem;
-  letter-spacing: 0.18em;
+  font-size: var(--text-eyebrow);
+  line-height: var(--text-eyebrow--line-height);
+  letter-spacing: var(--text-eyebrow--letter-spacing);
   text-transform: uppercase;
   color: var(--color-dim);
 }

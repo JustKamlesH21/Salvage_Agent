@@ -82,6 +82,26 @@ export type Posture = {
   compliance_tz: string
 }
 
+/** GET /rulebook — the gate chain and the policy rules, read off the live
+ *  modules by introspection, so this cannot drift from the code it describes. */
+export type Rulebook = {
+  gates: { gate: string; module: string; clause_ref: string; rule_text: string }[]
+  gate_order_note: string
+  remediation: Record<string, string>
+  max_remediation_hops: number
+  policy_rules: {
+    id: string
+    priority: number
+    when: Record<string, unknown>
+    action: string
+    because: string
+    cites: string[]
+    timing: string | null
+    stop_all_retries: boolean
+    max_delay_minutes: number | null
+  }[]
+}
+
 export type FeedItem = {
   decision_id: string
   case_id: string
@@ -105,6 +125,7 @@ export const api = {
   cases: () => get<{ cases: CaseSummary[]; counters: Counters }>('/cases'),
   case: (id: string) => get<CaseDetail>(`/cases/${id}`),
   posture: () => get<Posture>('/control/status'),
+  rulebook: () => get<Rulebook>('/rulebook'),
 
   async kill(engaged: boolean): Promise<Posture> {
     await fetch(`${BASE}/control/kill`, {

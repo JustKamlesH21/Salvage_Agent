@@ -11,5 +11,6 @@ fi
 rc=0
 npx --no-install tsc -b --noEmit || rc=1
 npm run --silent lint || rc=1
+npm run --silent test || rc=1
 npm run --silent build || rc=1
 exit $rc

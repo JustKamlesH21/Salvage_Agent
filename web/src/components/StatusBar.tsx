@@ -40,7 +40,7 @@ export function StatusBar({
       <button
         type="button"
         onClick={onHome}
-        className="font-display text-[15px] font-semibold tracking-tight"
+        className="font-display text-body font-semibold tracking-tight"
       >
         SALVAGE
       </button>
@@ -52,11 +52,11 @@ export function StatusBar({
           }`}
           aria-hidden
         />
-        <span className="data text-[11px] tracking-wider">{mode}</span>
+        <span className="data text-data tracking-wider">{mode}</span>
       </span>
 
       <span
-        className={`data hidden text-[10px] sm:inline ${
+        className={`data hidden text-data-sm sm:inline ${
           killed || armed ? 'text-paper/75' : 'text-dim'
         }`}
       >
@@ -66,7 +66,7 @@ export function StatusBar({
       <div className="ml-auto flex items-center gap-2">
         {posture && !posture.live_dispatch_available ? (
           <span
-            className={`data hidden text-[10px] md:inline ${
+            className={`data hidden text-data-sm md:inline ${
               killed || armed ? 'text-paper/75' : 'text-dim'
             }`}
             title={posture.live_dispatch_note}
@@ -78,10 +78,10 @@ export function StatusBar({
         <button
           type="button"
           onClick={() => onKill(!killed)}
-          className={`data border px-3 py-1 text-[10px] tracking-wider uppercase ${
+          className={`data border px-3 py-1 text-data-sm tracking-wider uppercase ${
             killed
-              ? 'border-paper text-paper hover:bg-paper hover:text-stamp'
-              : 'border-stamp text-stamp hover:bg-stamp hover:text-paper'
+              ? 'border-paper text-paper hover:bg-paper hover:text-block'
+              : 'border-stamp text-block hover:bg-stamp hover:text-paper'
           }`}
         >
           {killed ? 'Release kill switch' : 'Engage kill switch'}
