@@ -37,6 +37,8 @@ Razorpay test-mode APIs, and measures recovery against a baseline.
 | `COMPLIANCE.md` | Gate ↔ clause mapping with sources. |
 | `LIMITATIONS.md` | What this does not do, written harsher than a judge would ask. |
 | `NOTES.md` | Running log of surprises and bugs found. |
+| `PITCH.md` | The five-minute narration: the story, and what to show when. |
+| `VIDEO.md` | The shot list for the same five minutes: commands, URLs, numbers. |
 
 ## Running it
 

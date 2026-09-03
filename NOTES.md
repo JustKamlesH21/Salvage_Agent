@@ -1750,3 +1750,76 @@ where the model drives anything. Worth knowing: `LLM_FALLBACK_*` has been in
 `_call_llm()` uses `LLM_BASE_URL`/`API_KEY`/`MODEL` only. There is no fallback.
 The Groq values are parked in those slots as a one-line revert, not as a
 safety net.
+
+---
+
+## 2026-09-03 — day 6c: architecture review, three changes taken
+
+Ran an architecture review over the whole repo. Sixteen friction points; three
+acted on, the rest recorded here and deliberately left until after submission.
+
+**Taken 1 — the case history got its own module.** `api/scheduler/live.py`
+imported `_write_block_audit_rows` from `api/pipeline.py` — a module reaching
+past another module's seam for an underscore-prefixed name, which is the code
+saying the seam is in the wrong place. It needed two things from the pipeline
+(build a gate context from storage, file a refusal back into it) and wanted
+none of the orchestration around them. Those two, plus their helpers, are now
+`api/case_history.py`; `pipeline.py` drops from 604 to 445 lines and its
+public surface loses a name. No behaviour changed — verified by posting a live
+₹18,000 webhook after the move and getting the same 22 verdicts, the same G2
+and G3 refusals, the same substituted notice and the same two block rows.
+
+**Taken 2 — five settings that described a feature we do not have.** The four
+`LLM_FALLBACK_*` fields and `LLM_TEMPLATE_MODEL` were declared in
+`api/config.py` and `.env.example`, read by nothing, under the comment
+*"Fallback used when the primary times out (NFR-01: 8s cap)."* There is no
+fallback: `_call_llm()` reads `llm_base_url`/`api_key`/`model` and stops. The
+config was promising a resilience property the code never had — which mattered
+more from the moment the primary moved to Ollama, because anyone reading it
+would have believed Groq was catching failures. Removed from both files;
+Groq's values are parked as comments in `.env` so the revert is still one copy.
+
+Worth naming: `tests/test_config_parity.py` enforces only that every field
+appears in `.env.example`, never that anything reads it. **The mechanism that
+exists to stop config drifting was holding the dead fields in place.**
+
+**Taken 3 — the scheduler package denied its own contents.** Both
+`api/scheduler/__init__.py` and `runner.py` still said a live tick was out of
+scope, hours after `live.py` shipped one, and `__all__` omitted `tick` and
+`scheduler` — the two names anything outside the package calls.
+
+**Recorded, not taken.** Each is real; none is worth the churn the night before
+a submission, and the first two are the ones to do first afterwards:
+
+- The frontend re-declares backend facts in nine places while `GET /rulebook`
+  already serves five of them. `GATE_COUNT = 11` in `web/src/lib/hops.ts` is
+  the sharp one: a twelfth gate makes `splitHops` return `null` for every
+  decision and the tape silently falls back to an unsplit list.
+- `journey.ts` treats `terminal` and `exception` as case states. Neither string
+  appears anywhere in `api/`. The frontend has a vocabulary for case state that
+  the backend does not implement — and `CaseRepository.transition()` has no
+  production caller, so a case never leaves `"open"` in the first place.
+- The decision-document shape is written in two places, `pipeline.py` and
+  `scheduler/live.py`, twelve keys each.
+- `api/executor/__init__.py` re-exports `arm`, shadowing the submodule of the
+  same name, and two modules carry comments explaining how they route around
+  it. A facade its own package must bypass has negative depth.
+- `arm.py` and `killswitch.py` are the same module twice; `api/main.py` imports
+  kill-switch state from a *route* module to get at it.
+- `_Mutable` in `api/db/repositories.py` passes raw Mongo query dicts through,
+  so query knowledge is smeared across five modules. `RunRepository`,
+  `record_attempt` and `set_opt_out` have no callers at all.
+- Eight more dead config fields, including `AUDIT_CHAIN_KEY` — which sits in
+  the safety block and implies the hash chain is keyed. It is a plain sha256.
+  That one is deliberate and documented, but the placement invites the wrong
+  reading.
+- `web/public/architecture.html` is a second implementation of
+  `#/how-it-works` that hardcodes what the screen reads live, and being in
+  `public/` it is the one page `make verify` cannot check. Built for filming;
+  delete it or generate it once the video is cut.
+- Five hand-rolled copies of the same `alive`-flag fetch lifecycle across the
+  React screens. No fetch-state seam.
+- `tests/test_coverage_floor.py` asserts a day-0 condition that expired when
+  the gates landed; its own docstring says it should be gone by now.
+- `api/audit/` is still an empty placeholder package. Audit landed in
+  `api/db/repositories.py`.

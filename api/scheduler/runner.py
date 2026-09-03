@@ -1,8 +1,8 @@
 """fire_due_jobs() — the fire-time gate re-evaluation SPEC §5.5 and CLAUDE.md
-invariant 5 require. Pure and fully tested; a live APScheduler background
-thread calling this on a tick is deferred (no payoff this compressed cycle —
-no live demo mandate exists yet to schedule against). See the approved plan
-for this phase.
+invariant 5 require. Pure: it takes a clock, a context builder and an executor
+rather than reaching for any of them, which is what makes the whole of it
+reachable from a test. `api.scheduler.live.tick()` is the adapter that supplies
+the real three.
 
 The load-bearing property: `gate_context_builder` is called fresh for every
 job, with the *current* `now_utc` — nothing about the gate context is

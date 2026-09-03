@@ -40,6 +40,7 @@ import datetime as dt
 import logging
 from typing import Any
 
+from api.case_history import build_gate_context, write_block_audit_rows
 from api.config import settings
 from api.db.repositories import Repositories
 from api.executor import execute_action
@@ -47,7 +48,6 @@ from api.executor.killswitch import engaged as killswitch_engaged
 from api.executor.types import ActionResult
 from api.gates.registry import FinalAction
 from api.gates.types import GateContext, VerdictKind
-from api.pipeline import _write_block_audit_rows, build_gate_context
 from api.policy.types import Action
 from api.scheduler.runner import fire_due_jobs
 from api.scheduler.types import FireResult, ScheduledJob
@@ -302,7 +302,7 @@ async def _record(
     blocking = [v for v in result.chain.verdicts if v.kind == VerdictKind.BLOCK]
     decision_id = f"{result.job.decision_id}:fired:{int(now_utc.timestamp())}"
     if blocking:
-        await _write_block_audit_rows(
+        await write_block_audit_rows(
             blocking,
             case_id=case["_id"],
             decision_id=decision_id,

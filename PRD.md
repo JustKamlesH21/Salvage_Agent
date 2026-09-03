@@ -519,8 +519,6 @@ made during implementation, not a silent narrowing:**
 
 ## 10. Metrics
 
-## 10. Metrics
-
 **OUT OF SCOPE, Sep 2 replan:** reported per arm as a range across 3–5
 seeds, not mean ± 95% CI over 20 seeds — the original protocol below is
 superseded by §11's compressed plan and SALVAGE_SPEC §5.10. Kept here as the

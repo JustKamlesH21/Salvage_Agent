@@ -27,7 +27,7 @@ install:
 	cd web && npm install
 
 dev:
-	@echo "DRY_RUN is the default. Going live requires api.executor.arm.arm(token) — no live HTTP route yet."
+	@echo "DRY_RUN is the default. Arming needs POST /control/arm with the confirm token — and live dispatch is still an unimplemented stub, so armed changes the posture and nothing else."
 	@trap 'kill 0' EXIT; \
 	  DRY_RUN=true $(PY) -m uvicorn api.main:app --reload --host 127.0.0.1 --port 8000 & \
 	  (cd web && npm run dev) & \

@@ -38,15 +38,18 @@ class Settings(BaseSettings):
     mongo_db: str = "salvage"
 
     # LLM — diagnosis only. Never selects a money action (invariant 2).
+    #
+    # These four are the whole surface: `api.diagnose.client._call_llm()` reads
+    # base_url, api_key and model, and nothing else. There is deliberately no
+    # fallback provider. Four LLM_FALLBACK_* fields and an LLM_TEMPLATE_MODEL
+    # were declared here and in .env.example until day 6, read by nothing, with
+    # a comment promising failover on timeout — so the config described a
+    # resilience property the code does not have. If a fallback is wanted, it
+    # gets built and then declared, in that order.
     llm_provider: str = "groq"
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
-    llm_fallback_provider: str = ""
-    llm_fallback_base_url: str = ""
-    llm_fallback_api_key: str = ""
-    llm_fallback_model: str = ""
-    llm_template_model: str = ""
     # Skips the LLM call entirely when true — the normaliser's output passes
     # straight through as the diagnosis. This is arm C (SPEC §5.10): Salvage
     # with LLM diagnosis disabled. Never affects invariant 2 either way — the

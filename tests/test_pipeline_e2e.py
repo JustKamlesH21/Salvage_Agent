@@ -212,7 +212,7 @@ class TestSchedulerDriftEndToEnd:
         payment_amount = payload["payload"]["payment"]["entity"]["amount"]
 
         async def context_builder(job: ScheduledJob, now_utc: dt.datetime):  # type: ignore[no-untyped-def]
-            from api.pipeline import build_gate_context
+            from api.case_history import build_gate_context
 
             case = await repos.cases.get(case_id)
             return await build_gate_context(
