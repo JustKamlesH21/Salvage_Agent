@@ -663,6 +663,21 @@ async def run_sensitivity(
     }
 
 
+def _baseline_violation_share(batch: dict[str, Any]) -> float:
+    """Share of the cohort the baseline contacts outside the RBI window.
+
+    Averaged over seeds. The baseline sends exactly one dunning email per case
+    (contacts_per_case is 1.0 in every run), so a violation count is directly a
+    count of cases and the division is meaningful.
+    """
+    runs = batch["per_arm"].get("A", [])
+    cohort = batch.get("protocol", {}).get("cohort_size") or 0
+    if not runs or not cohort:
+        return 0.0
+    outside = [r["compliance"]["contacts_outside_0800_1900_ist"] for r in runs]
+    return sum(outside) / (len(outside) * cohort)
+
+
 def _headline(batch: dict[str, Any], sensitivity: dict[str, Any] | None) -> dict[str, Any]:
     """The findings this run actually supports, written so they cannot be
     quoted as something stronger.
@@ -703,11 +718,16 @@ def _headline(batch: dict[str, Any], sensitivity: dict[str, Any] | None) -> dict
             "salvage_wasted_on_hard_declines": span("C", "wasted_attempts_on_hard_declines"),
         },
         "compliance": {
+            # The share is computed, not asserted. This sentence previously read
+            # "on a fifth of cases" while the arrays beside it said 22, 19 and 29
+            # out of 40 — between a half and three quarters. Prose about numbers
+            # drifts from the numbers; prose derived from them cannot.
             "finding": (
                 "Zero compliance violations across every Salvage run, verified from the "
                 "record of what was dispatched rather than from the gate verdicts that "
                 "were supposed to guarantee it. The baseline's blind dunning email lands "
-                "outside the 08:00—19:00 IST contact window on a fifth of cases."
+                "outside the 08:00-19:00 IST contact window on "
+                f"{_baseline_violation_share(batch):.0%} of cases."
             ),
             "baseline": [s["compliance"] for s in batch["per_arm"].get("A", [])],
             "salvage": [s["compliance"] for s in batch["per_arm"].get("C", [])],

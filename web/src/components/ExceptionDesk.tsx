@@ -107,7 +107,18 @@ export function ExceptionDesk({
                     onClick={() => onOpenCase(item.id)}
                     className="cursor-pointer align-top hover:bg-white/60"
                   >
-                    <td className="data py-2.5 pr-4 text-data">{item.customer_ref}</td>
+                    <td className="data py-2.5 pr-4 text-data">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onOpenCase(item.id)
+                        }}
+                        className="hover:underline"
+                      >
+                        {item.customer_ref}
+                      </button>
+                    </td>
                     {/* Amounts align down the column. This is a ledger. */}
                     <td className="data py-2.5 pr-4 text-right text-data">
                       {rupees(item.amount_paise)}

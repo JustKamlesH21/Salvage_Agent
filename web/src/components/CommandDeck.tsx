@@ -265,7 +265,20 @@ export function CommandDeck({ onOpenCase }: { onOpenCase: (id: string) => void }
                   onClick={() => onOpenCase(item.id)}
                   className="cursor-pointer hover:bg-white/60"
                 >
-                  <td className="data px-4 py-2 text-data">{item.customer_ref}</td>
+                  <td className="data px-4 py-2 text-data">
+                    {/* The focusable control. The row's onClick is a convenience
+                        for a mouse; this is what a keyboard reaches. */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onOpenCase(item.id)
+                      }}
+                      className="hover:underline"
+                    >
+                      {item.customer_ref}
+                    </button>
+                  </td>
                   <td className="data px-4 py-2 text-data">{item.failure_class ?? '—'}</td>
                   <td className="data hidden px-4 py-2 text-data sm:table-cell">
                     <span
