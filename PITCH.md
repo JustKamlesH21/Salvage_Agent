@@ -60,8 +60,45 @@ In **Razorpay** → Settings → Webhooks → Add New Webhook:
 In **Razorpay** → Payment Links → Create Payment Link. Any amount, ₹499 is fine.
 Keep the link open in a tab. *(You get 30 links per test account. One is plenty.)*
 
-**6. Rehearse the failure once.** Open the link, and on the checkout page choose
-**Fail** on the Success/Fail toggle. Check a case appears on the **Deck** within
+### Test card details
+
+All three were confirmed against this account on day 1 — see NOTES.md, not from
+memory. Re-check razorpay.com/docs/payments/payments/test-card-details/ if
+Razorpay changes the list.
+
+**For the video (a Payment Link is a one-time payment):**
+
+| Field | Value |
+|---|---|
+| Card | `4111 1111 1111 1111` |
+| Expiry | any future date, e.g. `12 / 30` |
+| CVV | any 3 digits, e.g. `123` |
+| Name | anything |
+
+Submit, and Razorpay shows a simulated bank page with **Success** and **Failure**
+buttons. **Press Failure.** That is the toggle — there is no real OTP in test mode.
+
+**If you would rather the card decline by itself,** without pressing anything:
+
+| Card | What it does |
+|---|---|
+| `4100 2800 0008 0001` | Razorpay documents this as `insufficient_fund`. In this account it actually returned `BAD_REQUEST_ERROR` / `payment_failed` — the one generic reason. Either way it fails, which is all beat 3 needs. |
+
+**Not needed for the video, but do not get caught out:** a subscription mandate
+needs a different card. `4111 1111 1111 1111` is rejected with *"This card is not
+eligible for recurring payments"* — a one-time success card and a
+recurring-eligible card are two different things in test mode.
+
+| Card | Use |
+|---|---|
+| `4718 6091 0820 4366` | Visa domestic. The only card Razorpay documents for subscription/mandate authentication. |
+
+**Two constraints that bite:** a test-mode card token dies after **3 days**, and
+you get **30 Payment Links** per test account, ever. Authenticate mandates the
+day you record, not before.
+
+**6. Rehearse the failure once.** Open the link, pay with the card above, and
+press **Failure** on the bank page. Check a case appears on the **Deck** within
 about ten seconds. If it does, you are ready. If it does not, use the fallback in
 beat 3 and nothing is lost.
 
@@ -141,9 +178,10 @@ It prints a case id. You will need it in beat 6.
 **Do this, on camera:**
 
 1. Open your Payment Link
-2. Enter any test card, or pick UPI
-3. On the checkout screen, hit the **Fail** button on the Success/Fail toggle
-4. Switch to **Deck**
+2. Card `4111 1111 1111 1111`, expiry `12 / 30`, CVV `123`
+3. Submit — Razorpay shows a simulated bank page
+4. Press **Failure**
+5. Switch to **Deck**
 
 **SAY, while doing it:**
 
