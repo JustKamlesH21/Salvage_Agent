@@ -67,23 +67,23 @@ rather than silently absent, same discipline as everything else in this file.
   properly needs the other five webhook types' state-machine handling,
   explicitly out of this phase's scope.
 
-- **A `REPLAN` verdict is recorded in the decision document and then
-  dropped — nothing currently re-fires it.** `api/scheduler/runner.py`'s
-  `fire_due_jobs()` is fully built and tested (including the literal
-  10:00-scheduled/19:30-fired/G1-replans scenario), but nothing calls it in
-  production: `api/pipeline.py` never constructs or persists a
-  `ScheduledJob`, so a case whose only lawful path forward is "wait until
-  the window reopens" or "wait until the notice turns 24h" has no job
-  anywhere waiting to check that. This was scoped from the start as "a pure,
-  tested function, not a live background thread" (approved plan, this
-  phase) — the gap `compliance-auditor` sharpened is that the function has
-  *no caller at all* yet, live or offline, so a REPLAN today is a dead end
-  rather than a delay. A real job store and something to poll it is Day
-  5-or-later work. The same gap means a kill-switch block reached via the
-  scheduler path leaves no `audit` trace the way the pipeline's own
-  `_write_block_audit_rows()` gives the first pass — moot until
-  `fire_due_jobs()` has a real caller, but recorded here so it isn't
-  rediscovered as a surprise once it does.
+- **A `REPLAN` now re-fires, but only while the process is running and only
+  when switched on.** This entry described a real gap until day 6: through
+  day 5, `fire_due_jobs()` was fully built and tested yet had no caller, so a
+  replanned case sat at its scheduled time forever. `api/scheduler/live.py`
+  closed that — `tick()` calls `fire_due_jobs()`, and `api/main.py`'s lifespan
+  starts it. Gates genuinely re-evaluate at fire time against the real clock.
+  What remains true, and is the honest residue of the original gap:
+  **`SCHEDULER_TICK_SECONDS` defaults to 0 and no loop starts unless it is set**
+  — deliberate, for the same reason `DRY_RUN` defaults true, but it means an
+  unconfigured deployment still drops every REPLAN. There is also no job store:
+  a due job *is* the latest decision on a case whose `final.verdict` is
+  `replan` and whose `final.at` has passed, read back each tick. That avoids two
+  records disagreeing, but it means pending work lives only as long as the
+  decision history and is discovered by scan, not by queue. A decision written
+  before day 6 carries no `amount_paise`, and the tick **refuses** such a job
+  rather than re-gating against an amount it cannot verify — visible on the
+  Command Deck as older rows that say `due now` and never fire.
 
 - **Opt-out (G6_OPTOUT) fails open when a case has no resolvable
   `customer_id`.** `api/pipeline.py`'s `build_gate_context()` reads

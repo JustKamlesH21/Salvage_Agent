@@ -220,6 +220,20 @@ rules:
     class: CREDENTIAL_STALE
     source: razorpay/docs/errors/cards
     note: same bucket as card_not_enrolled/debit_instrument_inactive
+  - reason: international_transaction_not_allowed
+    class: CREDENTIAL_STALE
+    source: observed
+    note: >
+      OBSERVED, not doc-derived — captured live on 2026-09-03 from a real
+      test-mode payment link paid with a global card on an account without
+      international payments enabled. Razorpay sends
+      `international_transaction_not_allowed`; the docs list
+      `international_transaction_not_enabled`, which is the entry below. A
+      one-word difference, and the real decline fell through to UNKNOWN
+      because of it. Same class as its documented twin for the same reason:
+      a capability switch the customer can turn back on, so no blind retry
+      but not permanent either. This is the second of the 110 published
+      reasons with a real capture behind it.
   - reason: international_transaction_not_enabled
     class: CREDENTIAL_STALE
     source: razorpay/docs/errors/payment-reasons

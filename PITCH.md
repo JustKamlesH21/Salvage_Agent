@@ -169,30 +169,44 @@ It prints a case id. You will need it in beat 6.
 
 # The script
 
+Lines are broken where you breathe. Read to the end of a line, then take a beat.
+
+---
+
 ## Beat 1 — 0:00 to 0:40 — the problem
 
 **SHOW: Slide** (your face, or a title card)
 
 **SAY:**
 
-> Last year my gym membership got cancelled, and I did not cancel it.
+> Last year my gym membership got cancelled.
 >
-> The auto-debit ran on the 28th. My salary comes on the 1st. So it failed. Not
-> because I left, not because my card was dead. It just ran three days early.
+> I didn't cancel it.
 >
-> Then it tried again the next day. Failed. And the day after. Failed. And the
-> day after that.
+> The auto-debit ran on the 28th. My salary comes on the 1st.
+> So it failed. Not because I left. Not because my card was dead.
+> It just ran three days early.
 >
-> **On the fourth day the subscription was cancelled, and at ten to eleven at
-> night I got a WhatsApp asking me to pay.**
+> Then it tried again the next day. Failed.
+> And the day after. Failed.
+> And the day after that.
 >
-> I never signed up again. The gym lost about eighteen thousand rupees a year,
-> because their payment system retried on a timer instead of asking why.
+> **On the fourth day the subscription was cancelled.
+> And at ten to eleven at night, I got a WhatsApp asking me to pay.**
 
-*Pause here. Then:*
+*Pause.*
 
-> That retry is not badly built. It is exactly what Razorpay does, and it is a
-> safety net. It just does not know anything about why the charge failed.
+> I never signed up again.
+>
+> That gym lost about eighteen thousand rupees a year — because their payment
+> system retried on a timer instead of asking why.
+
+*Pause. Then:*
+
+> Now, that retry isn't badly built. It's exactly what Razorpay does, and it's
+> a safety net.
+>
+> It just doesn't know anything about why the charge failed.
 >
 > Salvage is the part that does.
 
@@ -200,29 +214,41 @@ It prints a case id. You will need it in beat 6.
 
 ## Beat 2 — 0:40 to 1:15 — how we solve it
 
-**SHOW: Diagram.** Scroll to the timeline picture (section 2).
+**SHOW: Diagram.** Scroll to the section headed **The problem**. The page has
+no section numbers — go by the heading. Your visual is the row labelled
+`RAZORPAY — three blind retries`.
 
 **SAY:**
 
-> Here is the gap. The three boxes on top are Razorpay's retries. Same schedule
-> every time, whether your card is dead or your salary is two days away. After
-> the third one, the subscription stops.
+> Here's the gap.
 >
-> The green box underneath is what Salvage adds. One attempt, on payday.
-
-*Point at the green line.*
-
-> And this bit matters: Razorpay's own documentation says a manual charge on an
-> invoice does not use up your three retries. So we add a smart attempt on top of
-> the safety net, instead of spending it.
-
-**Scroll down to the six boxes (section 3).**
-
-> Six steps between the webhook and the money. **The AI does one of them. It
-> reads the failure and tells us why. It never decides to move money.**
+> Those three boxes — T plus one, T plus two, T plus three — are Razorpay's
+> retries. Same schedule every time, whether your card is dead or your salary
+> is two days away.
 >
-> That is the whole design. Everything after this is me showing you it is
-> enforced, not just promised.
+> After the third one, the subscription goes to halted. That's the churn.
+
+*Point at the row below it — `SALVAGE — one diagnosed attempt, placed at the
+next payday window`.*
+
+> That row underneath is what Salvage adds. One attempt. On payday.
+>
+> And this bit matters. Razorpay's own docs say a manual charge on an invoice
+> doesn't use up your three retries.
+>
+> So we add a smart attempt on top of the safety net — instead of spending it.
+
+**Scroll down to the section headed "The pipeline"** — the six numbered steps,
+`01` Event to `06` Execute. The AI is `03 Diagnose`, the highlighted one.
+
+> Six steps between the webhook and the money.
+>
+> **The AI does one of them. It reads the failure and tells us why.
+> It never decides to move money.**
+>
+> That's the whole design.
+>
+> Everything after this is me showing you it's enforced — not just promised.
 
 ---
 
@@ -241,31 +267,46 @@ It prints a case id. You will need it in beat 6.
 
 **SAY, while doing it:**
 
-> Let me just break one. This is Razorpay test mode, my real account, a real
-> payment link.
+> Let me just break one.
+>
+> This is Razorpay test mode. My real account. A real payment link.
 
-*Click Fail.*
+*Fail the payment.*
 
 > And that fails.
 
 *Switch to Deck. Wait for the new row.*
 
-> That webhook came from Razorpay, over the internet, to my laptop. We check the
-> signature before we read a single field. And there is the case — classified,
-> checked, decided.
+> That webhook came from Razorpay, over the internet, to my laptop.
 >
-> **Nothing there was pre-loaded. No fixture, no seeded database.**
-
-**Then say this. Do not skip it:**
-
-> One honest thing. Razorpay's test mode lists a hundred and ten different
-> failure reasons. **Only one of them actually happens in test mode.** Everything
-> else comes back as a generic error. That is written up in our LIMITATIONS file.
+> We check the signature before we read a single field.
 >
-> So for the interesting cases, I replay a signed webhook instead. Same signature
-> check, same code, same eleven gates. Let me show you one.
+> And there's the case. Classified, checked, decided.
+>
+> **Nothing there was pre-loaded. No fixture. No seeded database.**
 
-**If the live payment does not work:** say *"test mode is being test mode, here is
+**Then say this. Don't skip it:**
+
+> One honest thing.
+>
+> Razorpay's test mode lists a hundred and ten different failure reasons.
+> **Two of them actually show up.** Everything else comes back generic.
+>
+> And I only found the second one yesterday — rehearsing this demo.
+> The docs call it "international transaction not enabled."
+> The live webhook says "not allowed."
+>
+> One word apart. And that one word meant a real decline fell straight through
+> to unknown.
+>
+> That's in our limitations file, and so is the fix.
+>
+> So for the interesting cases, I replay a signed webhook instead.
+> Same signature check. Same code. Same eleven gates.
+>
+> Let me show you one.
+
+**If the live payment doesn't work:** say *"test mode is being test mode — here's
 the same thing replayed"*, run `.venv/bin/python scripts/demo.py one --amount 1800000`
 in **Terminal**, and carry on. You lose nothing.
 
@@ -281,75 +322,110 @@ in **Terminal**, and carry on. You lose nothing.
 
 **SAY:**
 
-> This is where the case is right now. Like tracking a delivery. Except the
-> delivery time moved for a reason, and the reason is a rule.
+> This is where the case is right now.
+>
+> Like tracking a delivery. Except the delivery time moved for a reason —
+> and the reason is a rule.
 
 **Now scroll down to the two boxes side by side.**
 
 **SAY:**
 
-> Eighteen thousand rupees. Not enough balance. We work out that this is a
-> temporary money problem, not a dead card, and that is not the AI — that part is
-> plain code.
+> Eighteen thousand rupees. Not enough balance.
 >
-> We decide to retry it on payday. Then eleven rules run.
+> We work out that this is a temporary money problem, not a dead card.
+> And that part isn't the AI. That's plain code.
+>
+> So we decide to retry it on payday.
+>
+> Then eleven rules run.
 
 *Point at the left box.*
 
-> This is what we wanted to do. Retry the charge. And two rules say no.
+> This is what we wanted to do. Retry the charge.
 >
-> The first one: you have to warn the customer 24 hours before you take money.
-> We have not. So, no.
+> And two rules say no.
 >
-> The second one: eighteen thousand is over the fifteen thousand limit for taking
+> First one: you have to warn the customer twenty-four hours before you take
+> money. We haven't. So, no.
+>
+> Second one: eighteen thousand is over the fifteen thousand limit for taking
 > money without extra authentication. So, no.
 
 *Point at the arrow in the middle, then the right box.*
 
-> **And this arrow is the bit I would show you if you only had ten seconds.**
+> **And this arrow is the bit I'd show you if you only had ten seconds.**
 >
-> The rule did not just say no. It said what to do instead. So we send the
-> warning notice first. And then we put *that* through the same eleven rules from
-> scratch.
+> The rule didn't just say no. It said what to do instead.
 >
-> It does not get to assume its own fix is allowed.
+> So we send the warning notice first.
+>
+> And then we put *that* through the same eleven rules. From scratch.
+>
+> It doesn't get to assume its own fix is allowed.
 
 **Now click on one of the red-stamped rules.**
 
-> Every no comes with the actual regulation it came from. And that text is read
-> live from the code, so it cannot go stale.
+> Every no comes with the actual regulation it came from.
+>
+> And that text is read live from the code — so it can't go stale.
 
 ---
 
 ## Beat 5 — 3:00 to 3:25 — the two promises, in code
 
-**Here is exactly what to do:**
+**Here's exactly what to do:**
 
-1. **SHOW: Terminal.** Open `api/diagnose/schema.py`. Scroll to the block that
-   says `class DiagnosisContext`. It is about 8 lines. That is all you show.
-2. Then **SHOW: Terminal** with your `make verify` 8/8 output.
+1. **SHOW: Terminal.** Open `api/diagnose/schema.py` at `class DiagnosisContext`.
+   **Six fields**, under the docstring: `failure_reason`, `attempt_count`,
+   `attempt_timestamps`, `prior_failure_classes`, `mandate_type`,
+   `prior_successful_charge_dates`. That is all you show.
+2. Then **SHOW: Terminal** with your `make verify` output, scrolled to the
+   **SUMMARY** block at the bottom. Run it before you record — the web build
+   makes it slow — and just leave it on screen.
+
+```
+SUMMARY
+  v  1a lint         ruff check
+  v  1b format       ruff format --check
+  v  2  types        mypy --strict api/
+  v  3  tests        pytest + 100% branch cov on gates/ and normalise/
+  v  4  boundaries   Razorpay SDK confined; events/audit append-only   <- point here
+  v  5  clauses      every gate cites; every rule explains             <- then here
+  v  6  chain        event and audit hash chains intact
+  v  7  web          tsc --noEmit, lint, vitest, vite build
+
+verify: OK - 8/8
+```
+
+Point at the rows by **name**, not by counting. Step 1 splits into `1a` and
+`1b` — which is why seven steps report 8/8 — so `4 boundaries` is the *fifth*
+line down, not the fourth.
 
 **SAY, over the code:**
 
-> Two promises, and neither one is a document.
+> Two promises. Neither one is a document.
 >
-> This is everything the AI is allowed to see. Look at it — there is no name, no
-> phone number, no email, no amount.
+> This is everything the AI is allowed to see.
 >
-> **So leaking a customer's details into the AI is not against our rules. It is
-> impossible. The code would not compile.**
+> Six fields. Look at them. No name. No phone number. No email. No amount.
+>
+> **So leaking a customer's details into the AI isn't against our rules.
+> It's impossible. The code wouldn't compile.**
 
 **Now switch to the `make verify` output.**
 
-> And second: exactly one file in this project is allowed to talk to Razorpay.
+> And second — exactly one file in this project is allowed to talk to Razorpay.
 >
-> Line four there is the check. If a second file ever tries, the build fails. Not
-> a code review. The build.
+> That row there — **boundaries**. That's the check. If a second file ever
+> imports the Razorpay SDK, the build fails.
 >
-> Line five is the same idea for the rules. Every rule has to name the regulation
-> it comes from, or it does not ship.
+> Not a code review. The build.
+>
+> And the row under it — **clauses**. Same idea for the rules. Every rule has to
+> name the regulation it comes from, or it doesn't ship.
 
-**That is the whole code section. Do not open anything else.** Twenty-five
+**That's the whole code section. Don't open anything else.** Twenty-five
 seconds, then move on.
 
 ---
@@ -379,36 +455,42 @@ careful, and it is in NOTES.md.
 
 > Now look at this row. This case is waiting.
 >
-> Not stuck. Waiting, and it tells you why. That rule there moved it, because
-> the warning notice went out a few minutes ago and the regulation says you have
-> to wait twenty-four hours.
+> Not stuck. Waiting — and it tells you why.
+>
+> That rule there moved it. Because the warning notice went out a few minutes
+> ago, and the regulation says you have to wait twenty-four hours.
 >
 > And that number is counting down on its own.
 
-*(Small honest note, say it here:)*
+*(Small honest note. Say it here:)*
 
-> I shortened that wait for this video. I moved the clock, not the rules.
+> I shortened that wait for this video. I moved the clock — not the rules.
 
 **When it hits zero:**
 
 > There. It just went off by itself. Nobody clicked anything.
 >
-> And here is the important part. At that exact moment, it went back to the
-> database, looked up the whole history again, and ran all eleven rules a second
-> time.
+> And here's the important part.
+>
+> At that exact moment, it went back to the database, looked up the whole
+> history again, and ran all eleven rules a second time.
 
 **Click into the case. Point at the second tape.**
 
-> Look what it decided. **It said no again.**
+> Look what it decided.
 >
-> I moved the clock forward. I did not make the notice any older. The regulation
-> wants twenty-four hours and it has had five minutes. So it refused, and
-> rescheduled itself.
+> **It said no again.**
 >
-> **This is the whole point. Checking the rules when you schedule something is
-> not enough. You have to check them again when it actually runs.**
+> I moved the clock forward. I didn't make the notice any older.
 >
-> That is the thing my gym's system did not do at eleven at night.
+> The regulation wants twenty-four hours. It's had five minutes.
+>
+> So it refused. And rescheduled itself.
+>
+> **This is the whole point. Checking the rules when you schedule something
+> isn't enough. You have to check them again when it actually runs.**
+>
+> That's the thing my gym's system didn't do at eleven at night.
 
 ---
 
@@ -419,32 +501,36 @@ careful, and it is in NOTES.md.
 
 **SAY:**
 
-> Forty subscriptions, three runs. We report a range, not an average with a
-> confidence interval, because three runs does not earn one.
+> Forty subscriptions. Three runs.
+>
+> We report a range, not an average with a confidence interval — because three
+> runs doesn't earn one.
 
 *Point at the first box.*
 
-> **And here is the number I did not want.**
+> **And here's the number I didn't want.**
 >
-> We do not recover more money than three blind retries do. If I change my
-> simulator's settings by twenty percent, the winner flips. So we are not
-> claiming we make more money. That box says "not distinguishable" because that
-> is what the test says.
+> We don't recover more money than three blind retries do.
+>
+> If I change my simulator's settings by twenty percent, the winner flips.
+>
+> So we're not claiming we make more money. That box says "not
+> distinguishable," because that's what the test says.
 
 *Point at the other three boxes.*
 
-> What is true every single time:
+> Here's what is true every single time.
 >
 > We get the same result with about a third fewer attempts.
 >
-> We spend zero attempts on dead cards. The old way burns thirty a run, retrying
-> cards that will never work, because it does not know they are dead.
+> We spend zero attempts on dead cards. The old way burns thirty a run —
+> retrying cards that will never work, because it doesn't know they're dead.
 >
 > And zero messages outside the legal hours. The old way sends nineteen to
-> twenty-nine of them per run.
+> twenty-nine of them, per run.
 >
-> **We checked that last one by looking at what actually got sent, not by asking
-> our own rules whether they worked.**
+> **We checked that last one by looking at what actually got sent. Not by
+> asking our own rules whether they worked.**
 
 ---
 
@@ -455,30 +541,44 @@ red **kill switch** button, top right.
 
 **SAY:**
 
-> This is everything the agent refused to decide. If it does not understand a
-> failure, it hands it to a human instead of guessing with someone's money.
+> This is everything the agent refused to decide.
+>
+> If it doesn't understand a failure, it hands it to a human — instead of
+> guessing with someone's money.
 
 *Click the kill switch. The bar turns red.*
 
-> And there is a stop button. It is the first rule in every check, it needs no
-> password, and nothing moves while it is on.
+> And there's a stop button.
+>
+> It's the first rule in every check. It needs no password. And nothing moves
+> while it's on.
 
 **SHOW: Slide** (back to your face)
 
-> Every number here comes from a simulator, because test mode would not give me
-> realistic failures. Our comparison is built from Razorpay's documentation, not
-> measured. And we have not built the part that moves real money yet.
+> Every number here comes from a simulator — because test mode wouldn't give me
+> realistic failures.
+>
+> Our comparison is built from Razorpay's documentation, not measured.
+>
+> The path that moves real money is built, and it's gated — it takes an
+> explicit arm with a confirm token. We have never armed it. Everything you
+> just saw ran in dry-run.
 >
 > All of that is written down in our limitations file.
 >
-> **What we can prove is smaller than what we set out to build. I would rather
-> tell you that than have you find it.**
+> **What we can prove is smaller than what we set out to build.
+> I'd rather tell you that than have you find it.**
+
+*Pause.*
+
+> My gym didn't lose me because their system retried.
 >
-> My gym did not lose me because their system retried. It lost me because it
-> retried without asking why, and then messaged me at eleven at night.
+> It lost me because it retried without asking why — and then messaged me at
+> eleven at night.
 >
-> Salvage is the part that asks why. And the part that is not allowed to message
-> you at eleven at night.
+> Salvage is the part that asks why.
+>
+> And the part that isn't allowed to message you at eleven at night.
 
 ---
 
@@ -488,7 +588,7 @@ red **kill switch** button, top right.
 |---|---|---|
 | 1 | Slide | You. The gym story. |
 | 2 | Diagram | Timeline picture, then the six boxes |
-| 3 | Razorpay → Deck | Click Fail. New case appears. |
+| 3 | Razorpay → Deck | Fail the payment. New case appears. |
 | 4 | Deck → case | **Two boxes side by side, and the arrow** |
 | 5 | Terminal | `DiagnosisContext` (8 lines), then verify 8/8 |
 | 6 | Deck | **The countdown in the Next column**, then two tapes |
@@ -497,9 +597,9 @@ red **kill switch** button, top right.
 
 **Six lines to keep:**
 
-1. "At ten to eleven at night I got a WhatsApp asking me to pay."
+1. "At ten to eleven at night, I got a WhatsApp asking me to pay."
 2. "The AI reads the failure. It never decides to move money."
-3. "It does not get a chance to assume its own fix is allowed."
+3. "It doesn't get to assume its own fix is allowed."
 4. "It said no again."
-5. "Here is the number I did not want."
+5. "Here's the number I didn't want."
 6. "Salvage is the part that asks why."
