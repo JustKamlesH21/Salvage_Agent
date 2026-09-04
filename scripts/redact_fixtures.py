@@ -54,6 +54,10 @@ DEST = ROOT / "tests" / "fixtures"
 # Worthless by design. The real secret never enters the repository.
 FIXTURE_SECRET = "salvage_fixture_webhook_secret"  # noqa: S105
 
+# Stands in for the capture-time ngrok hostname. Shape-preserving like every
+# other replacement here: still a plausible tunnel host, carries no address.
+TUNNEL_HOST = "salvage-fixture.ngrok-free.app"
+
 # Free-text and contact fields. Replaced, shape preserved.
 PII_KEYS = frozenset(
     {
@@ -239,6 +243,16 @@ def redact_file(raw_path: Path) -> dict[str, Any]:
     headers["x-razorpay-signature"] = sign(redacted_bytes)
     headers.pop("cookie", None)
     headers.pop("authorization", None)
+    # A free-tier ngrok hostname embeds the tunnel client's public IP
+    # ("69c8-223-181-12-125.ngrok-free.app" is 223.181.12.125), so the capture
+    # host is the author's home address, not Razorpay's. Committing it to a
+    # public repo publishes it. Replaced rather than dropped, because the
+    # headers exist to show what a real delivery looks like and a fixture with
+    # no Host is not one. `x-forwarded-for` stays: that is Razorpay's own
+    # egress IP, which is theirs and public.
+    for header in ("host", "x-forwarded-host"):
+        if header in headers:
+            headers[header] = TUNNEL_HOST
     (DEST / f"{stem}.headers.json").write_text(
         json.dumps(headers, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )

@@ -13,6 +13,8 @@
 [![mode](https://img.shields.io/badge/DRY__RUN-default%20true-c62828?style=flat-square)](#three-barriers-stand-between-this-and-real-money)
 [![python](https://img.shields.io/badge/python-3.12-3776ab?style=flat-square)](#10--setup)
 
+### [▶  Watch the 5-minute walkthrough](https://drive.google.com/file/d/1q3T5XE8jgTmSKE87WYrUe8BHS-HyC2la/view?usp=share_link)
+
 ---
 
 ### The LLM diagnoses. It never decides to move money.
@@ -25,6 +27,7 @@
 
 | | |
 |---|---|
+| [▶ Video walkthrough](https://drive.google.com/file/d/1q3T5XE8jgTmSKE87WYrUe8BHS-HyC2la/view?usp=share_link) | Five minutes: the problem, the gates, and the numbers |
 | [1 · The problem](#1--the-problem) | Why a failed recurring charge is not a retry problem |
 | [2 · What Salvage is](#2--what-salvage-is) | The agent, its loop, and its bounded authority |
 | [3 · Architecture](#3--architecture) | The diagram and the four boundaries that hold it up |
