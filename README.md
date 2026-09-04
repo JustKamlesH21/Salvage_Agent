@@ -4,7 +4,7 @@
 
 **A compliance-gated payment recovery agent.**
 
-*Razorpay AI Buildathon 2026 · Track 03 — Agentic Payment Operations*
+*Razorpay AI Buildathon 2026 · Track 03 — AI Revenue Recovery*
 
 [![verify](https://img.shields.io/badge/make%20verify-8%2F8%20green-2e7d32?style=flat-square)](#8--verification--the-gate)
 [![tests](https://img.shields.io/badge/tests-536-1565c0?style=flat-square)](#8--verification--the-gate)
