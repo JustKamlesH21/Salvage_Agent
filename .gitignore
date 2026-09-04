@@ -48,3 +48,6 @@ tests/local_only/test_real_signature.py
 # development trail is itself evidence of how the work went.)
 PITCH.md
 VIDEO.md
+
+# Submission scaffolding, same as PITCH.md/VIDEO.md — not for the judges.
+SUBMISSION.md
