@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 800" role="img"
+     aria-label="The Salvage decision pipeline: a payment.failed webhook passes through ingest, normalise, diagnose, policy, the eleven-gate chain, the executor and the append-only audit log. Four boundaries are marked: the LLM returns a diagnosis and never an action, the gate chain cannot be bypassed, the executor is the only Razorpay SDK importer, and the audit log is append-only and hash-chained.">
+  <rect x="0" y="0" width="1120" height="800" fill="#fbfaf7"/>
+
+  <defs>
+    <style>
+      .d { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+      .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6b7a88"/>
+    </marker>
+    <marker id="arg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#b26b00"/>
+    </marker>
+  </defs>
+
+  <!-- header -->
+  <text class="m" x="60" y="46" font-size="12" letter-spacing="3" fill="#6b7a88">THE DECISION PIPELINE</text>
+  <text class="d" x="60" y="82" font-size="26" font-weight="700" fill="#12263a">Diagnose with a model. Decide with code.</text>
+
+  <!-- spine -->
+  <line x1="104" y1="120" x2="104" y2="726" stroke="#d6d2c8" stroke-width="1"/>
+
+  <!-- ── 1 INGEST ─────────────────────────────────────────── -->
+  <circle cx="104" cy="150" r="5" fill="#12263a"/>
+  <rect x="134" y="122" width="300" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+  <text class="m" x="152" y="146" font-size="14" font-weight="600" fill="#12263a">INGEST</text>
+  <text class="m" x="152" y="166" font-size="11" fill="#6b7a88">payment.failed</text>
+  <text class="m" x="470" y="143" font-size="12" fill="#12263a">HMAC verified on the RAW body — before any parse</text>
+  <text class="m" x="470" y="162" font-size="12" fill="#6b7a88">deduped on rz_event_id · stored append-only, hash-chained</text>
+
+  <!-- ── 2 NORMALISE ──────────────────────────────────────── -->
+  <circle cx="104" cy="234" r="5" fill="#12263a"/>
+  <rect x="134" y="206" width="300" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+  <text class="m" x="152" y="230" font-size="14" font-weight="600" fill="#12263a">NORMALISE</text>
+  <text class="m" x="152" y="250" font-size="11" fill="#6b7a88">deterministic classifier</text>
+  <text class="m" x="470" y="227" font-size="12" fill="#12263a">110 published reasons → 9 failure classes</text>
+  <text class="m" x="470" y="246" font-size="12" fill="#6b7a88">no match returns UNKNOWN · never a guess · 100% branch cov</text>
+
+  <!-- ── 3 DIAGNOSE ───────────────────────────────────────── -->
+  <circle cx="104" cy="318" r="5" fill="#b26b00"/>
+  <rect x="134" y="290" width="300" height="56" fill="#ffffff" stroke="#b26b00" stroke-width="2"/>
+  <text class="m" x="152" y="314" font-size="14" font-weight="600" fill="#b26b00">DIAGNOSE</text>
+  <text class="m" x="152" y="334" font-size="11" fill="#6b7a88">RootCause only</text>
+  <rect x="470" y="296" width="150" height="20" fill="#b26b00" fill-opacity="0.12"/>
+  <text class="m" x="478" y="310" font-size="11" font-weight="600" fill="#b26b00">◀ THE ONLY LLM</text>
+  <text class="m" x="470" y="332" font-size="12" fill="#12263a">returns a diagnosis, never an action</text>
+  <text class="m" x="470" y="350" font-size="12" fill="#6b7a88">no name, contact, email or amount can reach the prompt</text>
+  <text class="m" x="470" y="368" font-size="12" fill="#6b7a88">normaliser overrides it whenever it is not UNKNOWN</text>
+
+  <!-- ── 4 POLICY ─────────────────────────────────────────── -->
+  <circle cx="104" cy="418" r="5" fill="#12263a"/>
+  <rect x="134" y="390" width="300" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+  <text class="m" x="152" y="414" font-size="14" font-weight="600" fill="#12263a">POLICY</text>
+  <text class="m" x="152" y="434" font-size="11" fill="#6b7a88">11 rules · no model</text>
+  <text class="m" x="470" y="411" font-size="12" fill="#12263a">priority-ordered YAML — proposes ONE action</text>
+  <text class="m" x="470" y="430" font-size="12" fill="#6b7a88">every rule carries `because` and `cites` or the build fails</text>
+
+  <!-- ── 5 GATES ──────────────────────────────────────────── -->
+  <circle cx="104" cy="516" r="5" fill="#b3261e"/>
+  <rect x="134" y="474" width="300" height="84" fill="#ffffff" stroke="#b3261e" stroke-width="2"/>
+  <text class="m" x="152" y="500" font-size="14" font-weight="600" fill="#b3261e">GATES  G0 … G10</text>
+  <text class="m" x="152" y="522" font-size="11" fill="#6b7a88">ALLOW · BLOCK · REPLAN</text>
+  <text class="m" x="152" y="542" font-size="11" fill="#6b7a88">G0_KILL evaluated first, always</text>
+  <rect x="470" y="480" width="196" height="20" fill="#b3261e" fill-opacity="0.12"/>
+  <text class="m" x="478" y="494" font-size="11" font-weight="600" fill="#b3261e">◀ NON-BYPASSABLE</text>
+  <text class="m" x="470" y="516" font-size="12" fill="#12263a">all eleven run, in order, on every decision</text>
+  <text class="m" x="470" y="534" font-size="12" fill="#6b7a88">no flag, argument or config value skips or reorders one</text>
+  <text class="m" x="470" y="552" font-size="12" fill="#6b7a88">re-evaluated at FIRE time, not only at schedule time</text>
+
+  <!-- remediation loop: out of the chain and back into it -->
+  <path d="M 134 548 L 70 548 L 70 490 L 132 490" fill="none" stroke="#b26b00"
+        stroke-width="1.5" stroke-dasharray="3 4" marker-end="url(#arg)"/>
+  <text class="m" x="470" y="580" font-size="11" font-weight="600" fill="#b26b00">a BLOCK may convert into a remedy</text>
+  <text class="m" x="470" y="598" font-size="11" fill="#6b7a88">the substitute is re-gated from scratch, bounded at 3 hops</text>
+  <text class="m" x="470" y="616" font-size="11" fill="#6b7a88">exhausting the bound dispatches NOTHING</text>
+
+  <!-- ── 6 EXECUTOR ───────────────────────────────────────── -->
+  <circle cx="104" cy="672" r="5" fill="#12263a"/>
+  <rect x="134" y="644" width="300" height="56" fill="#ffffff" stroke="#12263a" stroke-width="2"/>
+  <text class="m" x="152" y="668" font-size="14" font-weight="600" fill="#12263a">EXECUTOR</text>
+  <text class="m" x="152" y="688" font-size="11" fill="#6b7a88">10 bounded actions</text>
+  <rect x="470" y="650" width="166" height="20" fill="#12263a" fill-opacity="0.10"/>
+  <text class="m" x="478" y="664" font-size="11" font-weight="600" fill="#12263a">◀ THE ONLY DOOR</text>
+  <text class="m" x="470" y="686" font-size="12" fill="#12263a">the sole Razorpay SDK importer in the repository</text>
+  <text class="m" x="470" y="704" font-size="12" fill="#6b7a88">pre-audit row inserted first · DRY_RUN default + arm token</text>
+
+  <!-- ── 7 AUDIT ──────────────────────────────────────────── -->
+  <circle cx="104" cy="752" r="5" fill="#1f6f4a"/>
+  <rect x="134" y="726" width="300" height="52" fill="#1f6f4a" fill-opacity="0.08" stroke="#1f6f4a" stroke-width="1.5"/>
+  <text class="m" x="152" y="748" font-size="14" font-weight="600" fill="#1f6f4a">AUDIT</text>
+  <text class="m" x="152" y="768" font-size="11" fill="#6b7a88">append-only · hash-chained</text>
+  <text class="m" x="470" y="748" font-size="12" fill="#12263a">every document carries prev_hash and hash</text>
+  <text class="m" x="470" y="766" font-size="12" fill="#6b7a88">MISMATCH · ORPHAN · FORK are all distinguishable</text>
+
+  <!-- flow arrows down the spine -->
+  <g stroke="#6b7a88" stroke-width="1.5" marker-end="url(#ar)">
+    <line x1="284" y1="178" x2="284" y2="200"/>
+    <line x1="284" y1="262" x2="284" y2="284"/>
+    <line x1="284" y1="346" x2="284" y2="384"/>
+    <line x1="284" y1="446" x2="284" y2="468"/>
+    <line x1="284" y1="558" x2="284" y2="638"/>
+    <line x1="284" y1="700" x2="284" y2="720"/>
+  </g>
+</svg>

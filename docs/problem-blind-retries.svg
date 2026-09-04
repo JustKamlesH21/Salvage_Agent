@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 300" role="img" aria-label="Razorpay retries at T+1, T+2 and T+3 on a fixed schedule and then halts the subscription. Salvage places one diagnosed attempt at the next payday window instead, which does not consume the retry budget.">
+  <rect x="0" y="0" width="100%" height="100%" fill="#fbfaf7"/>
+        <line x1="60" y1="150" x2="1020" y2="150" stroke="#d6d2c8" stroke-width="1"/>
+
+        <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#12263a">
+          <text x="60" y="34">RAZORPAY — three blind retries, fixed schedule</text>
+        </g>
+
+        <!-- the failure -->
+        <rect x="62" y="134" width="30" height="30" fill="none" stroke="#b3261e" stroke-width="2"/>
+        <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+          <text x="62" y="196" fill="#b3261e">charge fails</text>
+          <text x="62" y="216" fill="#6b7a88">28th · T = 0</text>
+        </g>
+
+        <!-- the ladder -->
+        <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#6b7a88">
+          <line x1="290" y1="82" x2="290" y2="150" stroke="#d6d2c8" stroke-width="1" stroke-dasharray="2 4"/>
+          <rect x="275" y="62" width="30" height="30" fill="none" stroke="#12263a" stroke-width="2"/>
+          <text x="275" y="50">T+1</text>
+
+          <line x1="480" y1="82" x2="480" y2="150" stroke="#d6d2c8" stroke-width="1" stroke-dasharray="2 4"/>
+          <rect x="465" y="62" width="30" height="30" fill="none" stroke="#12263a" stroke-width="2"/>
+          <text x="465" y="50">T+2</text>
+
+          <line x1="670" y1="82" x2="670" y2="150" stroke="#d6d2c8" stroke-width="1" stroke-dasharray="2 4"/>
+          <rect x="655" y="62" width="30" height="30" fill="none" stroke="#12263a" stroke-width="2"/>
+          <text x="655" y="50">T+3</text>
+        </g>
+
+        <!-- halted -->
+        <rect x="960" y="134" width="30" height="30" fill="#b3261e" fill-opacity="0.14" stroke="#b3261e" stroke-width="2"/>
+        <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+          <text x="905" y="196" fill="#b3261e">halted · churned</text>
+        </g>
+
+        <!-- salvage's insert -->
+        <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13">
+          <line x1="800" y1="150" x2="800" y2="232" stroke="#1f6f4a" stroke-width="1" stroke-dasharray="2 4"/>
+          <rect x="785" y="232" width="30" height="30" fill="#1f6f4a" fill-opacity="0.14" stroke="#1f6f4a" stroke-width="2"/>
+          <text x="60" y="252" fill="#1f6f4a">SALVAGE — one diagnosed attempt, placed at the next payday window</text>
+          <text x="60" y="276" fill="#6b7a88">a manual charge on an issued invoice does not consume the auto-retry budget</text>
+        </g>
+      </svg>

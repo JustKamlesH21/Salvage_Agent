@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 520" role="img"
+     aria-label="The eleven-gate compliance chain, G0 through G10, each labelled with the rule it enforces and the clause it cites. G0_KILL is evaluated first, always. Every gate runs on every decision, even after an earlier gate has already blocked.">
+  <rect x="0" y="0" width="1120" height="520" fill="#fbfaf7"/>
+  <defs>
+    <style>
+      .d { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+      .m { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+  </defs>
+
+  <text class="m" x="60" y="44" font-size="12" letter-spacing="3" fill="#6b7a88">THE COMPLIANCE CHAIN</text>
+  <text class="d" x="60" y="80" font-size="26" font-weight="700" fill="#12263a">Eleven gates, in order, every time</text>
+  <text class="m" x="60" y="106" font-size="12" fill="#6b7a88">Every gate runs on every decision — including the ones after another has already blocked, because the Decision Tape shows all eleven verdicts.</text>
+
+  <!-- rail -->
+  <line x1="60" y1="196" x2="1060" y2="196" stroke="#d6d2c8" stroke-width="1"/>
+
+  <!-- G0 — always first -->
+  <rect x="60" y="168" width="78" height="56" fill="#b3261e" fill-opacity="0.12" stroke="#b3261e" stroke-width="2"/>
+  <text class="m" x="72" y="192" font-size="12" font-weight="700" fill="#b3261e">G0</text>
+  <text class="m" x="72" y="210" font-size="10" fill="#b3261e">KILL</text>
+
+  <g class="m" font-size="12" font-weight="600" fill="#12263a">
+    <rect x="150" y="168" width="78" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+    <text x="162" y="192">G1</text><text x="162" y="210" font-size="10" font-weight="400" fill="#6b7a88">WINDOW</text>
+
+    <rect x="240" y="168" width="78" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+    <text x="252" y="192">G2</text><text x="252" y="210" font-size="10" font-weight="400" fill="#6b7a88">PREDEBIT</text>
+
+    <rect x="330" y="168" width="78" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+    <text x="342" y="192">G3</text><text x="342" y="210" font-size="10" font-weight="400" fill="#6b7a88">AFA</text>
+
+    <rect x="420" y="168" width="78" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+    <text x="432" y="192">G4</text><text x="432" y="210" font-size="10" font-weight="400" fill="#6b7a88">BUDGET</text>
+
+    <rect x="510" y="168" width="78" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+    <text x="522" y="192">G5</text><text x="522" y="210" font-size="10" font-weight="400" fill="#6b7a88">COOLDOWN</text>
+
+    <rect x="600" y="168" width="78" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+    <text x="612" y="192">G6</text><text x="612" y="210" font-size="10" font-weight="400" fill="#6b7a88">OPTOUT</text>
+
+    <rect x="690" y="168" width="78" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+    <text x="702" y="192">G7</text><text x="702" y="210" font-size="10" font-weight="400" fill="#6b7a88">3RDPARTY</text>
+
+    <rect x="780" y="168" width="78" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+    <text x="792" y="192">G8</text><text x="792" y="210" font-size="10" font-weight="400" fill="#6b7a88">POSTDEBIT</text>
+
+    <rect x="870" y="168" width="78" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+    <text x="882" y="192">G9</text><text x="882" y="210" font-size="10" font-weight="400" fill="#6b7a88">HALTED</text>
+
+    <rect x="960" y="168" width="88" height="56" fill="#ffffff" stroke="#12263a" stroke-width="1.5"/>
+    <text x="972" y="192">G10</text><text x="972" y="210" font-size="10" font-weight="400" fill="#6b7a88">IDEMPOTENT</text>
+  </g>
+
+  <!-- first-always callout -->
+  <line x1="99" y1="168" x2="99" y2="140" stroke="#b3261e" stroke-width="1" stroke-dasharray="2 3"/>
+  <text class="m" x="60" y="132" font-size="11" font-weight="600" fill="#b3261e">first, always — stopping never needs protecting</text>
+
+  <!-- clause row -->
+  <g class="m" font-size="10" fill="#6b7a88">
+    <text x="60" y="252" fill="#b3261e">kill switch</text><text x="60" y="266" fill="#b3261e">always first</text>
+    <text x="150" y="252">08:00–19:00</text><text x="150" y="266">IST contact</text>
+    <text x="240" y="252">notice ≥24h</text><text x="240" y="266">before debit</text>
+    <text x="330" y="252">₹15k / ₹1L</text><text x="330" y="266">AFA ceiling</text>
+    <text x="420" y="252">≤4 attempts</text><text x="420" y="266">per 14 days</text>
+    <text x="510" y="252">≥48h gap,</text><text x="510" y="266">≤3 per 7 days</text>
+    <text x="600" y="252">opt-out is</text><text x="600" y="266">permanent</text>
+    <text x="690" y="252">account holder</text><text x="690" y="266">only</text>
+    <text x="780" y="252">confirmation</text><text x="780" y="266">channel req'd</text>
+    <text x="870" y="252">halted ≠</text><text x="870" y="266">chargeable</text>
+    <text x="960" y="252">one key,</text><text x="960" y="266">one dispatch</text>
+  </g>
+
+  <!-- source row -->
+  <line x1="60" y1="292" x2="1060" y2="292" stroke="#d6d2c8" stroke-width="1"/>
+  <g class="m" font-size="10">
+    <text x="60" y="316" fill="#b3261e">RBI Fair Practices Code · DOR.ORG.REC.65/21.04.158/2022-23</text>
+    <text x="60" y="334" fill="#b3261e">RBI Digital Payments E-mandate Framework 2026 · RBI/DPSS/2026-27/396</text>
+    <text x="60" y="352" fill="#6b7a88">Card network retry limits · anti-harassment research · Razorpay subscription state machine</text>
+  </g>
+
+  <!-- verdict legend -->
+  <g class="m" font-size="11">
+    <rect x="60" y="386" width="14" height="14" fill="#1f6f4a" fill-opacity="0.16" stroke="#1f6f4a" stroke-width="1.5"/>
+    <text x="84" y="398" fill="#12263a">ALLOW</text>
+    <text x="146" y="398" fill="#6b7a88">the action is permitted — this clause was checked and passed</text>
+
+    <rect x="60" y="412" width="14" height="14" fill="#b3261e" fill-opacity="0.16" stroke="#b3261e" stroke-width="1.5"/>
+    <text x="84" y="424" fill="#12263a">BLOCK</text>
+    <text x="146" y="424" fill="#6b7a88">refused — G2 and G3 convert theirs into a remedy, re-gated in full</text>
+
+    <rect x="60" y="438" width="14" height="14" fill="#b26b00" fill-opacity="0.16" stroke="#b26b00" stroke-width="1.5"/>
+    <text x="84" y="450" fill="#12263a">REPLAN</text>
+    <text x="146" y="450" fill="#6b7a88">not now — try at a stated later time, when all eleven gates run again from scratch</text>
+  </g>
+
+  <!-- closing note, full width below the legend -->
+  <line x1="60" y1="472" x2="1060" y2="472" stroke="#d6d2c8" stroke-width="1"/>
+  <text class="m" x="60" y="496" font-size="11" fill="#12263a">Every gate exports CLAUSE_REF and RULE_TEXT. A gate that cannot say which rule it enforces fails `make verify` and cannot ship.</text>
+</svg>

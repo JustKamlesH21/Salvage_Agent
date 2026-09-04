@@ -10,7 +10,7 @@ mechanically rather than by convention — `make verify` fails if any is broken.
                           │                     dedupe on rz_event_id
                           ▼
                      NORMALISE ───────────────── deterministic, 100% branch cov
-                          │                      114 published reasons → 9 classes
+                          │                      110 published reasons → 9 classes
                           ▼
                      DIAGNOSE ────────────────── ◀── THE ONLY LLM
                           │                      returns a diagnosis, never an action

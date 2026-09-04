@@ -41,3 +41,10 @@ tests/fixtures/_unredacted/
 # local mongod — are committed normally; norecursedirs in pyproject.toml is
 # what keeps the whole directory out of the standard test run.
 tests/local_only/test_real_signature.py
+
+# Internal production docs — the recording is done; these are scaffolding for it,
+# not part of the submission. Kept on disk, untracked from here on.
+# (They remain in git history, which is a deliberate choice: the 27-commit
+# development trail is itself evidence of how the work went.)
+PITCH.md
+VIDEO.md
