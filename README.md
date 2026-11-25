@@ -1,25 +1,23 @@
+<p align="center">
+  <img src="assets/readme/banner.svg" width="100%" alt="Salvage, a compliance-gated payment recovery agent for the Razorpay AI Buildathon 2026, Track 03: an LLM diagnoses each failed charge and eleven compliance gates decide what runs.">
+</p>
+
 <div align="center">
 
-# Salvage
+[![verify](https://img.shields.io/badge/make%20verify-8%2F8%20green-45692A?style=flat-square)](#8--verification--the-gate)
+[![tests](https://img.shields.io/badge/tests-536-2A7F7B?style=flat-square)](#8--verification--the-gate)
+[![gates](https://img.shields.io/badge/compliance%20gates-11-E4572E?style=flat-square)](#5--the-eleven-gates)
+[![mode](https://img.shields.io/badge/DRY__RUN-default%20true-1B1A17?style=flat-square)](#three-barriers-stand-between-this-and-real-money)
 
-**A compliance-gated payment recovery agent.**
+### [▶ Watch the 5-minute walkthrough](https://drive.google.com/file/d/1q3T5XE8jgTmSKE87WYrUe8BHS-HyC2la/view?usp=share_link)
 
-*Razorpay AI Buildathon 2026 · Track 03 — AI Revenue Recovery*
-
-[![verify](https://img.shields.io/badge/make%20verify-8%2F8%20green-2e7d32?style=flat-square)](#8--verification--the-gate)
-[![tests](https://img.shields.io/badge/tests-536-1565c0?style=flat-square)](#8--verification--the-gate)
-[![coverage](https://img.shields.io/badge/branch%20coverage-100%25%20on%20gates%20%2B%20normalise-1565c0?style=flat-square)](#8--verification--the-gate)
-[![gates](https://img.shields.io/badge/compliance%20gates-11-6a1b9a?style=flat-square)](#5--the-eleven-gates)
-[![mode](https://img.shields.io/badge/DRY__RUN-default%20true-c62828?style=flat-square)](#three-barriers-stand-between-this-and-real-money)
-[![python](https://img.shields.io/badge/python-3.12-3776ab?style=flat-square)](#10--setup)
-
-### [▶  Watch the 5-minute walkthrough](https://drive.google.com/file/d/1q3T5XE8jgTmSKE87WYrUe8BHS-HyC2la/view?usp=share_link)
-
----
-
-### The LLM diagnoses. It never decides to move money.
+**The LLM diagnoses. It never decides to move money.**
 
 </div>
+
+<p align="center">
+  <img src="assets/readme/proof.svg" width="100%" alt="In numbers: 11 compliance gates, run twice; 115 taxonomy rules; 10 actions it is allowed; 536 tests.">
+</p>
 
 ---
 
@@ -95,6 +93,10 @@ Salvage is an **agent with deliberately bounded authority**. That phrase is
 doing real work, so here is exactly what it means.
 
 ### The loop
+
+<p align="center">
+  <img src="assets/readme/how-it-works.svg" width="100%" alt="The loop: observe a payment.failed webhook, classify with 115 taxonomy rules, diagnose with the LLM, decide one action from the YAML rulebook, permit through 11 gates, time it, re-permit through the 11 gates again, then execute through one door with a hash-chained log.">
+</p>
 
 ```
    observe          a payment.failed webhook arrives, HMAC-verified on the raw body
@@ -801,3 +803,7 @@ routing — that is Optimizer's job, not ours.
 *The LLM diagnoses. It never decides to move money.*
 
 </div>
+
+<p align="center">
+  <a href="https://github.com/JustKamlesH21"><img src="assets/readme/footer.svg" width="100%" alt="Part of Kamlesh OS. More projects on github.com/JustKamlesH21"></a>
+</p>
