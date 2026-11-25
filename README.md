@@ -66,7 +66,7 @@ broke until payday; the other is a customer who just got paid. Blind retries
 treat them identically.
 
 <p align="center">
-  <img src="docs/problem-blind-retries.svg" alt="Razorpay retries at T+1, T+2 and T+3 on a fixed schedule, then halts the subscription. Salvage places one diagnosed attempt at the next payday window instead, which does not consume the retry budget." width="100%">
+  <picture><source media="(max-width: 767px)" srcset="docs/problem-blind-retries-m.png"><img src="docs/problem-blind-retries.svg" alt="Razorpay retries at T+1, T+2 and T+3 on a fixed schedule, then halts the subscription. Salvage places one diagnosed attempt at the next payday window instead, which does not consume the retry budget." width="100%"></picture>
 </p>
 
 **The lever is documented, not clever.** Razorpay's own docs state that a manual
@@ -179,7 +179,7 @@ turns out to be load-bearing is a finding, not an embarrassment.
 The full pipeline with its four boundaries:
 
 <p align="center">
-  <img src="docs/architecture.svg" alt="The Salvage decision pipeline: ingest, normalise, diagnose, policy, the eleven-gate chain, executor and append-only audit, with the four boundaries marked." width="100%">
+  <picture><source media="(max-width: 767px)" srcset="docs/architecture-m.png"><img src="docs/architecture.svg" alt="The Salvage decision pipeline: ingest, normalise, diagnose, policy, the eleven-gate chain, executor and append-only audit, with the four boundaries marked." width="100%"></picture>
 </p>
 
 > The same diagram, interactive and with the reasoning attached, is served at
@@ -336,7 +336,7 @@ If a gate blocked but the block has a remedy (`G2_PREDEBIT` → send the notice;
 chain again** from scratch. Bounded at 3 hops. Exhaustion dispatches nothing.
 
 <p align="center">
-  <img src="docs/remediation.svg" alt="A proposed scheduled retry is refused by gates G2 and G3. Salvage substitutes a pre-debit notice and re-gates it from scratch, producing 22 gate verdicts on one decision." width="100%">
+  <picture><source media="(max-width: 767px)" srcset="docs/remediation-m.png"><img src="docs/remediation.svg" alt="A proposed scheduled retry is refused by gates G2 and G3. Salvage substitutes a pre-debit notice and re-gates it from scratch, producing 22 gate verdicts on one decision." width="100%"></picture>
 </p>
 
 A refusal is not the end of the decision. It is the start of a different one —
@@ -369,7 +369,7 @@ that cannot say which rule it enforces cannot ship. `COMPLIANCE.md` carries
 the full verbatim mapping including scope caveats.
 
 <p align="center">
-  <img src="docs/gate-chain.svg" alt="The eleven-gate compliance chain G0 through G10, each with the rule it enforces and the clause it cites." width="100%">
+  <picture><source media="(max-width: 767px)" srcset="docs/gate-chain-m.png"><img src="docs/gate-chain.svg" alt="The eleven-gate compliance chain G0 through G10, each with the rule it enforces and the clause it cites." width="100%"></picture>
 </p>
 
 | Gate | Enforces | Source | Verdicts |
