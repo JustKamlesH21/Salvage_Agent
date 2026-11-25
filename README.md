@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/readme/banner.svg" width="100%" alt="Salvage, a compliance-gated payment recovery agent for the Razorpay AI Buildathon 2026, Track 03: an LLM diagnoses each failed charge and eleven compliance gates decide what runs.">
+  <picture><source media="(max-width: 767px)" srcset="assets/readme/banner-m.svg"><img src="assets/readme/banner.svg" width="100%" alt="Salvage, a compliance-gated payment recovery agent for the Razorpay AI Buildathon 2026, Track 03: an LLM diagnoses each failed charge and eleven compliance gates decide what runs."></picture>
 </p>
 
 <div align="center">
@@ -16,7 +16,7 @@
 </div>
 
 <p align="center">
-  <img src="assets/readme/proof.svg" width="100%" alt="In numbers: 11 compliance gates, run twice; 115 taxonomy rules; 10 actions it is allowed; 536 tests.">
+  <picture><source media="(max-width: 767px)" srcset="assets/readme/proof-m.svg"><img src="assets/readme/proof.svg" width="100%" alt="In numbers: 11 compliance gates, run twice; 115 taxonomy rules; 10 actions it is allowed; 536 tests."></picture>
 </p>
 
 ---
@@ -95,7 +95,7 @@ doing real work, so here is exactly what it means.
 ### The loop
 
 <p align="center">
-  <img src="assets/readme/how-it-works.svg" width="100%" alt="The loop: observe a payment.failed webhook, classify with 115 taxonomy rules, diagnose with the LLM, decide one action from the YAML rulebook, permit through 11 gates, time it, re-permit through the 11 gates again, then execute through one door with a hash-chained log.">
+  <picture><source media="(max-width: 767px)" srcset="assets/readme/how-it-works-m.svg"><img src="assets/readme/how-it-works.svg" width="100%" alt="The loop: observe a payment.failed webhook, classify with 115 taxonomy rules, diagnose with the LLM, decide one action from the YAML rulebook, permit through 11 gates, time it, re-permit through the 11 gates again, then execute through one door with a hash-chained log."></picture>
 </p>
 
 ```
@@ -805,5 +805,5 @@ routing — that is Optimizer's job, not ours.
 </div>
 
 <p align="center">
-  <a href="https://github.com/JustKamlesH21"><img src="assets/readme/footer.svg" width="100%" alt="Part of Kamlesh OS. More projects on github.com/JustKamlesH21"></a>
+  <a href="https://github.com/JustKamlesH21"><picture><source media="(max-width: 767px)" srcset="assets/readme/footer-m.svg"><img src="assets/readme/footer.svg" width="100%" alt="Part of Kamlesh OS. More projects on github.com/JustKamlesH21"></picture></a>
 </p>
