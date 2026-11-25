@@ -1,5 +1,5 @@
 <p align="center">
-  <picture><source media="(max-width: 767px)" srcset="assets/readme/banner-m.svg"><img src="assets/readme/banner.svg" width="100%" alt="Salvage, a compliance-gated payment recovery agent for the Razorpay AI Buildathon 2026, Track 03: an LLM diagnoses each failed charge and eleven compliance gates decide what runs."></picture>
+  <picture><source media="(max-width: 767px)" srcset="assets/readme/banner-m.png"><img src="assets/readme/banner.svg" width="100%" alt="Salvage, a compliance-gated payment recovery agent for the Razorpay AI Buildathon 2026, Track 03: an LLM diagnoses each failed charge and eleven compliance gates decide what runs."></picture>
 </p>
 
 <div align="center">
@@ -16,13 +16,13 @@
 </div>
 
 <p align="center">
-  <picture><source media="(max-width: 767px)" srcset="assets/readme/proof-m.svg"><img src="assets/readme/proof.svg" width="100%" alt="In numbers: 11 compliance gates, run twice; 115 taxonomy rules; 10 actions it is allowed; 536 tests."></picture>
+  <picture><source media="(max-width: 767px)" srcset="assets/readme/proof-m.png"><img src="assets/readme/proof.svg" width="100%" alt="In numbers: 11 compliance gates, run twice; 115 taxonomy rules; 10 actions it is allowed; 536 tests."></picture>
 </p>
 
 ---
 
 <p align="center">
-  <picture><source media="(max-width: 767px)" srcset="assets/readme/glance-m.svg"><img src="assets/readme/glance.svg" width="100%" alt="At a glance. Built: Sep 2026; Made for: Razorpay AI Buildathon 2026, Track 03; Stack: FastAPI · MongoDB · Groq · React; Status: make verify 8/8 green, 536 tests"></picture>
+  <picture><source media="(max-width: 767px)" srcset="assets/readme/glance-m.png"><img src="assets/readme/glance.svg" width="100%" alt="At a glance. Built: Sep 2026; Made for: Razorpay AI Buildathon 2026, Track 03; Stack: FastAPI · MongoDB · Groq · React; Status: make verify 8/8 green, 536 tests"></picture>
 </p>
 
 ## Contents
@@ -99,7 +99,7 @@ doing real work, so here is exactly what it means.
 ### The loop
 
 <p align="center">
-  <picture><source media="(max-width: 767px)" srcset="assets/readme/how-it-works-m.svg"><img src="assets/readme/how-it-works.svg" width="100%" alt="The loop: observe a payment.failed webhook, classify with 115 taxonomy rules, diagnose with the LLM, decide one action from the YAML rulebook, permit through 11 gates, time it, re-permit through the 11 gates again, then execute through one door with a hash-chained log."></picture>
+  <picture><source media="(max-width: 767px)" srcset="assets/readme/how-it-works-m.png"><img src="assets/readme/how-it-works.svg" width="100%" alt="The loop: observe a payment.failed webhook, classify with 115 taxonomy rules, diagnose with the LLM, decide one action from the YAML rulebook, permit through 11 gates, time it, re-permit through the 11 gates again, then execute through one door with a hash-chained log."></picture>
 </p>
 
 ```
@@ -173,7 +173,7 @@ turns out to be load-bearing is a finding, not an embarrassment.
 ## 3 · Architecture
 
 <p align="center">
-  <picture><source media="(max-width: 767px)" srcset="assets/readme/architecture-m.svg"><img src="assets/readme/architecture.svg" width="100%" alt="Architecture overview. Razorpay test mode sends a payment.failed webhook; decide (normalise with 115 rules, diagnose with Groq Llama, YAML policy, 11 gates); act (scheduler, the single executor, hash-chained audit in MongoDB); see (React dashboard and the Decision Tape over SSE)."></picture>
+  <picture><source media="(max-width: 767px)" srcset="assets/readme/architecture-m.png"><img src="assets/readme/architecture.svg" width="100%" alt="Architecture overview. Razorpay test mode sends a payment.failed webhook; decide (normalise with 115 rules, diagnose with Groq Llama, YAML policy, 11 gates); act (scheduler, the single executor, hash-chained audit in MongoDB); see (React dashboard and the Decision Tape over SSE)."></picture>
 </p>
 
 The full pipeline with its four boundaries:
@@ -815,5 +815,5 @@ routing — that is Optimizer's job, not ours.
 </div>
 
 <p align="center">
-  <a href="https://github.com/JustKamlesH21"><picture><source media="(max-width: 767px)" srcset="assets/readme/footer-m.svg"><img src="assets/readme/footer.svg" width="100%" alt="Part of Kamlesh OS. More projects on github.com/JustKamlesH21"></picture></a>
+  <a href="https://github.com/JustKamlesH21"><picture><source media="(max-width: 767px)" srcset="assets/readme/footer-m.png"><img src="assets/readme/footer.svg" width="100%" alt="Part of Kamlesh OS. More projects on github.com/JustKamlesH21"></picture></a>
 </p>
