@@ -21,6 +21,10 @@
 
 ---
 
+<p align="center">
+  <picture><source media="(max-width: 767px)" srcset="assets/readme/glance-m.svg"><img src="assets/readme/glance.svg" width="100%" alt="At a glance. Built: Sep 2026; Made for: Razorpay AI Buildathon 2026, Track 03; Stack: FastAPI · MongoDB · Groq · React; Status: make verify 8/8 green, 536 tests"></picture>
+</p>
+
 ## Contents
 
 | | |
