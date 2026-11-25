@@ -169,6 +169,12 @@ turns out to be load-bearing is a finding, not an embarrassment.
 ## 3 · Architecture
 
 <p align="center">
+  <picture><source media="(max-width: 767px)" srcset="assets/readme/architecture-m.svg"><img src="assets/readme/architecture.svg" width="100%" alt="Architecture overview. Razorpay test mode sends a payment.failed webhook; decide (normalise with 115 rules, diagnose with Groq Llama, YAML policy, 11 gates); act (scheduler, the single executor, hash-chained audit in MongoDB); see (React dashboard and the Decision Tape over SSE)."></picture>
+</p>
+
+The full pipeline with its four boundaries:
+
+<p align="center">
   <img src="docs/architecture.svg" alt="The Salvage decision pipeline: ingest, normalise, diagnose, policy, the eleven-gate chain, executor and append-only audit, with the four boundaries marked." width="100%">
 </p>
 
